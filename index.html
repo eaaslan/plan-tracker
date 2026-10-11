@@ -223,8 +223,8 @@ function demoData() {
 async function load() {
   if (DEMO) { data = demoData(); view = 'focus'; status(DEMO_MSG); return render(); }
   if (!cfg.token || !cfg.gist) { view = 'setup'; return render(); }
-  while (inflight) await inflight;
   const startGen = gen;
+  while (inflight) await inflight;
   const gist = cfg.gist;
   status('Loading…');
   try {
@@ -320,7 +320,7 @@ function takePrio(s) {
   return [prio, s.replace(/\s+/g, ' ').trim()];
 }
 
-function parseLine(line, keepDate = false) {
+function parseLine(line, { keepDate = false } = {}) {
   let s = line.trim().replace(/^([-*•]|\d+[.)]|\[[ xX]?\])\s+/, '').trim();
   let prio, date = '';
   [prio, s] = takePrio(s);
@@ -491,7 +491,7 @@ function renderPlan(p) {
   const left = p.due ? daysBetween(today(), p.due) : null;
   const text = h('input', { type: 'text', placeholder: 'New step…' });
   const date = h('input', { type: 'date' });
-  const addOne = () => { const it = parseLine(text.value, !!date.value); if (!it) return; if (date.value) it.date = date.value; p.items.push(it); save(); setTimeout(() => document.querySelector('.add input[type=text]')?.focus()); };
+  const addOne = () => { const it = parseLine(text.value, { keepDate: !!date.value }); if (!it) return; if (date.value) it.date = date.value; p.items.push(it); save(); setTimeout(() => document.querySelector('.add input[type=text]')?.focus()); };
   text.addEventListener('keydown', (e) => { if (e.key === 'Enter') addOne(); });
   const bulk = h('textarea', { placeholder: 'One step per line. Date at the start, priority (! or !!) anywhere, both optional:\n2026-10-14 IAM and security !!\n15.10 EC2, S3, RDS\n- Practice exam 1 !' });
 
@@ -512,7 +512,7 @@ function renderPlan(p) {
       h('summary', {}, 'Add several steps (e.g. paste a plan from Claude)'),
       bulk,
       h('button', { class: 'primary', style: 'margin-top:6px', onclick: () => {
-        const items = bulk.value.split('\n').map(parseLine).filter(Boolean);
+        const items = bulk.value.split('\n').map((l) => parseLine(l)).filter(Boolean);
         if (items.length) { p.items.push(...items); save(); }
       } }, 'Add lines'),
     ),
