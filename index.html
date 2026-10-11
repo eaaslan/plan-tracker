@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Plans">
+<title>Plans</title>
+<style>
+  :root { --bg:#f6f6f4; --card:#fff; --ink:#222; --muted:#888; --line:#e4e4e0; --acc:#2f6fed; --ok:#2e9e5b; --bad:#d64545; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1b1b1d; --card:#252528; --ink:#e8e8e8; --muted:#8a8a8f; --line:#353539; --acc:#6b9bff; --ok:#4cc27e; --bad:#ff6b6b; }
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; font:15px/1.45 -apple-system, system-ui, sans-serif; background:var(--bg); color:var(--ink); display:flex; min-height:100vh; }
+  input, textarea, button { font:inherit; color:inherit; }
+  input[type=text], input[type=date], textarea { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:5px 8px; }
+  button { background:none; border:1px solid var(--line); border-radius:6px; padding:4px 10px; cursor:pointer; }
+  button:hover { border-color:var(--acc); }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.danger { color:var(--bad); }
+  button.icon { border:none; padding:2px 6px; color:var(--muted); }
+  button.icon:hover { color:var(--ink); }
+  aside { width:260px; border-right:1px solid var(--line); padding:16px; display:flex; flex-direction:column; gap:6px; }
+  aside h1 { font-size:18px; margin:0 0 8px; }
+  .nav { padding:7px 10px; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; gap:8px; }
+  .nav:hover { background:var(--card); }
+  .nav.sel { background:var(--card); box-shadow:0 0 0 1px var(--line); font-weight:600; }
+  .nav .pct { color:var(--muted); font-weight:400; font-size:13px; }
+  .nav.archived { opacity:.55; }
+  .sep { border-top:1px solid var(--line); margin:8px 0; }
+  .small { font-size:13px; color:var(--muted); }
+  main { flex:1; padding:24px 32px; max-width:860px; }
+  .title { font-size:22px; font-weight:600; border:none !important; background:none !important; padding:0 !important; width:100%; }
+  .meta { display:flex; gap:12px; align-items:center; margin:8px 0 14px; flex-wrap:wrap; }
+  .bar { height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin-bottom:18px; }
+  .bar > div { height:100%; background:var(--ok); transition:width .2s; }
+  .item { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); }
+  .item input[type=text] { flex:1; border-color:transparent; background:none; }
+  .item input[type=text]:focus { border-color:var(--line); background:var(--card); }
+  .item.done input[type=text] { text-decoration:line-through; color:var(--muted); }
+  .item input[type=date] { width:140px; border-color:transparent; background:none; color:var(--muted); }
+  .item.late input[type=date] { color:var(--bad); }
+  .item .plan { font-size:12px; color:var(--muted); cursor:pointer; white-space:nowrap; }
+  input[type=checkbox] { width:18px; height:18px; accent-color:var(--ok); }
+  .add { display:flex; gap:8px; margin-top:12px; }
+  .add input[type=text] { flex:1; }
+  textarea { width:100%; min-height:110px; margin-top:6px; }
+  details { margin-top:18px; }
+  summary { cursor:pointer; color:var(--muted); }
+  h2 { font-size:15px; margin:20px 0 4px; color:var(--muted); font-weight:600; }
+  h2.bad { color:var(--bad); }
+  .empty { color:var(--muted); padding:8px 0; }
+  .actions { margin-top:28px; display:flex; gap:8px; }
+  .form { display:flex; flex-direction:column; gap:6px; max-width:520px; margin-top:12px; }
+  .form .actions { margin-top:10px; }
+  a { color:var(--acc); }
+  code { font-size:13px; background:var(--card); padding:1px 5px; border-radius:4px; word-break:break-all; }
+  main.wide { max-width:none; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:middle; }
+  .calhead { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+  .calhead .title { width:auto; flex:1; text-transform:capitalize; }
+  .seg { display:flex; }
+  .seg button { border-radius:0; margin-left:-1px; }
+  .seg button:first-child { border-radius:6px 0 0 6px; margin-left:0; }
+  .seg button:last-child { border-radius:0 6px 6px 0; }
+  .seg button.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .cal { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); border-left:1px solid var(--line); border-top:1px solid var(--line); }
+  .cal .wd { padding:6px 8px; font-size:12px; color:var(--muted); border-right:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .day { border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:4px; min-height:100px; display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .cal.week .day { min-height:340px; }
+  .day.out { opacity:.4; }
+  .day.today { background:color-mix(in srgb, var(--acc) 10%, transparent); }
+  .day.today .dn { color:var(--acc); font-weight:700; }
+  .dn { font-size:12px; color:var(--muted); padding:2px 4px; }
+  .wdm { display:none; }
+  .chip { display:flex; align-items:flex-start; gap:5px; font-size:12px; line-height:1.3; padding:3px 5px; border-radius:4px; background:color-mix(in srgb, var(--c) 16%, transparent); border-left:3px solid var(--c); }
+  .chip input[type=checkbox] { width:13px; height:13px; margin:1px 0 0; flex:none; }
+  .chip .txt { cursor:pointer; overflow:hidden; word-break:break-word; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
+  .cal.month .chip .txt { display:block; white-space:nowrap; text-overflow:ellipsis; }
+  .chip.done .txt { text-decoration:line-through; opacity:.6; }
+  .chip.late { box-shadow:inset 0 0 0 1px var(--bad); }
+  .chip.due { background:var(--c); color:#fff; font-weight:600; cursor:pointer; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:13px; color:var(--muted); }
+  .ptag { font-weight:800; margin-right:5px; }
+  .ptag.p1 { color:#e0a030; }
+  .ptag.p2 { color:var(--bad); }
+  .chip.due .ptag { color:#fff; }
+  button.prio { border:none; width:26px; padding:0; font-weight:800; color:var(--line); flex:none; }
+  button.prio:hover { color:var(--muted); }
+  button.prio.p1 { color:#e0a030; }
+  button.prio.p2 { color:var(--bad); }
+  select { font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:6px; padding:4px 6px; }
+  .help { display:flex; flex-direction:column; gap:3px; margin:8px 0 14px; }
+  .importgrid { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  textarea.big { min-height:340px; margin:0; font-family:ui-monospace, Menlo, monospace; font-size:13px; }
+  .preview { display:flex; flex-direction:column; gap:12px; }
+  .preview > button { align-self:flex-start; }
+  .pv { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .pvh { margin-bottom:4px; }
+  .pvi { font-size:14px; padding:2px 0 2px 12px; border-left:2px solid var(--line); }
+  pre.prompt { white-space:pre-wrap; font-size:12px; background:var(--card); border:1px solid var(--line); border-radius:6px; padding:10px; }
+  main.focus { max-width:none; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; }
+  .ftop { position:fixed; top:14px; left:16px; }
+  .fcard { max-width:640px; width:100%; text-align:center; display:flex; flex-direction:column; align-items:center; }
+  .fmeta { color:var(--muted); font-size:14px; margin-bottom:14px; }
+  .ftask { font-size:32px; font-weight:650; line-height:1.25; margin-bottom:28px; word-break:break-word; }
+  .ftimer { font-size:22px; color:var(--muted); font-variant-numeric:tabular-nums; margin:-14px 0 24px; }
+  .fbtns { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  button.big { font-size:18px; padding:12px 30px; border-radius:10px; }
+  button.ghost { border:none; color:var(--muted); }
+  button.ghost:hover { color:var(--ink); }
+  .fnote { margin-top:28px; color:var(--muted); font-size:13px; }
+  #status { position:fixed; bottom:16px; right:16px; padding:6px 12px; border-radius:6px; background:var(--card); box-shadow:0 0 0 1px var(--line); font-size:13px; display:none; }
+  #status.show { display:block; }
+  #status.bad { background:var(--bad); color:#fff; box-shadow:none; }
+  @media (max-width: 700px) {
+    body { flex-direction:column; }
+    aside { width:auto; border-right:none; border-bottom:1px solid var(--line); padding:12px 16px; }
+    aside label { margin-top:4px !important; }
+    main { padding:16px; }
+    .item { flex-wrap:wrap; gap:4px 8px; }
+    .item input[type=text] { flex:1 1 70%; }
+    .item input[type=date] { width:auto; margin-left:26px; }
+    .add { flex-wrap:wrap; }
+    .importgrid { grid-template-columns:1fr; }
+    .ftask { font-size:26px; }
+    main.focus { padding:24px; }
+    textarea.big { min-height:220px; }
+    .cal.week { grid-template-columns:1fr; }
+    .cal.week .wd { display:none; }
+    .cal.week .day { min-height:auto; padding:6px 8px; }
+    .cal.week .wdm { display:inline; }
+    .cal.week .chip { font-size:14px; padding:5px 7px; }
+    .cal.month .day { min-height:58px; padding:2px; flex-direction:row; flex-wrap:wrap; align-content:flex-start; gap:3px; }
+    .cal.month .dn { width:100%; padding:1px 2px; }
+    .cal.month .chip { width:8px; height:8px; padding:0; border:none; border-radius:50%; background:var(--c); }
+    .cal.month .chip.done { opacity:.35; }
+    .cal.month .chip > * { display:none !important; }
+    .add input[type=text] { flex:1 1 100%; }
+    input[type=text], input[type=date], textarea { font-size:16px; }
+  }
+</style>
+</head>
+<body>
+<aside id="side"></aside>
+<main id="main"></main>
+<div id="status"></div>
+<script>
+let data = { plans: [] };
+let view = 'focus';
+let showArchived = false;
+let confirmDelete = false;
+
+const $ = (id) => document.getElementById(id);
+const uid = () => Math.random().toString(36).slice(2, 10);
+const pad = (n) => String(n).padStart(2, '0');
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const today = () => ymd(new Date());
+const addDays = (s, n) => { const d = new Date(s + 'T00:00'); d.setDate(d.getDate() + n); return ymd(d); };
+const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00') - new Date(a + 'T00:00')) / 86400000);
+const fmt = (s) => new Date(s + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', weekday: 'short' });
+
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'class') el.className = v;
+    else if (k in el) el[k] = v;
+    else if (v != null && v !== false) el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
+  return el;
+}
+
+const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false));
+
+const GIST_FILE = 'plan-tracker.json';
+const LEGACY_FILE = 'plan-takip.json';
+let legacy = false;
+const cfg = { token: localStorage.getItem('pt_token') || '', gist: localStorage.getItem('pt_gist') || '' };
+let dirty = false;
+let saveTimer;
+
+async function gh(path, opts = {}) {
+  const r = await fetch('https://api.github.com/gists' + path, {
+    ...opts,
+    keepalive: !!opts.body && opts.body.length < 60000,
+    headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+  });
+  if (!r.ok) throw new Error(r.status === 401 ? 'Invalid token' : r.status === 404 ? 'Gist not found' : `GitHub error ${r.status}`);
+  return r.json();
+}
+
+const DEMO = new URLSearchParams(location.search).has('demo');
+const DEMO_MSG = 'Demo data. Nothing is saved.';
+
+function demoData() {
+  const t = today();
+  const items = (list) => list.map(([off, text, done, prio]) => ({ id: uid(), text, date: off == null ? '' : addDays(t, off), done: !!done, prio: prio || 0 }));
+  return { plans: [
+    { id: 'aws', title: 'AWS Cloud Practitioner', due: addDays(t, 18), prio: 2, archived: false, items: items([
+      [-6, 'Cloud concepts and AWS global infrastructure', 1], [-4, 'IAM: users, groups, roles, policies', 1], [-2, 'EC2 and pricing models', 1],
+      [-1, 'S3 storage classes', 0, 2], [0, 'RDS, DynamoDB, Aurora'], [1, 'VPC, subnet, security group'], [3, 'CloudWatch, CloudTrail, Config'],
+      [5, 'Practice exam 1', 0, 1], [7, 'Shared responsibility model'], [9, 'Billing, Cost Explorer, Budgets'], [11, 'Well-Architected six pillars'],
+      [13, 'Practice exam 2'], [16, 'Review weak topics'], [null, 'Book the exam', 1]]) },
+    { id: 'run', title: '5K run training', due: addDays(t, 30), archived: false, items: items([
+      [-5, '20 min easy run', 1], [-3, 'Interval 6x400m', 1], [-1, '25 min easy run'], [2, 'Long run 4 km'],
+      [4, 'Interval 8x400m'], [6, '30 min tempo run'], [9, 'Long run 5 km'], [12, 'Test 5K']]) },
+    { id: 'english', title: 'English speaking', due: '', archived: false, items: items([
+      [-7, 'Podcast + 10 new words', 1], [0, 'italki lesson'], [7, 'italki lesson'], [14, 'italki lesson'], [21, 'italki lesson']]) },
+    { id: 'moving', title: 'Moving house', due: addDays(t, 24), prio: 1, archived: false, items: items([
+      [2, 'Get quotes from movers', 0, 2], [8, 'Pack the boxes'], [15, 'Transfer the internet contract'], [22, 'Update address'], [null, 'Donate what I don\'t need', 0, 1]]) },
+  ] };
+}
+
+async function load() {
+  if (DEMO) { data = demoData(); view = 'focus'; status(DEMO_MSG); return render(); }
+  if (!cfg.token || !cfg.gist) { view = 'setup'; return render(); }
+  status('Loading…');
+  try {
+    const files = (await gh('/' + cfg.gist)).files;
+    legacy = !files[GIST_FILE] && !!files[LEGACY_FILE];
+    const f = files[GIST_FILE] || files[LEGACY_FILE];
+    if (!f) throw new Error(`${GIST_FILE} is missing from the Gist`);
+    const json = JSON.parse(f.truncated ? await (await fetch(f.raw_url)).text() : f.content);
+    if (!Array.isArray(json.plans)) throw new Error('The Gist content is not in the expected format');
+    data = json;
+    if (view === 'setup') view = 'focus';
+    status('');
+  } catch (e) {
+    status(e.message, true);
+    view = 'setup';
+  }
+  render();
+}
+
+function save() {
+  render();
+  if (DEMO) return;
+  dirty = true;
+  status('Saving…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flush, 800);
+}
+
+async function flush() {
+  clearTimeout(saveTimer);
+  if (!dirty) return;
+  dirty = false;
+  try {
+    const files = { [GIST_FILE]: { content: JSON.stringify(data, null, 2) } };
+    if (legacy) files[LEGACY_FILE] = null;
+    await gh('/' + cfg.gist, { method: 'PATCH', body: JSON.stringify({ files }) });
+    legacy = false;
+    if (!dirty) status('');
+  } catch (e) {
+    dirty = true;
+    status('Could not save: ' + e.message, true);
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flush();
+  else if (!dirty && !DEMO && view !== 'setup') load();
+});
+
+function status(msg, bad) {
+  const el = $('status');
+  el.textContent = msg;
+  el.className = msg ? (bad ? 'show bad' : 'show') : '';
+}
+
+const progress = (p) => p.items.length ? Math.round(100 * p.items.filter((i) => i.done).length / p.items.length) : 0;
+const findPlan = (id) => data.plans.find((p) => p.id === id);
+
+const PRIO_LABEL = ['Normal', 'Important', 'Urgent'];
+const PRIO_MARK = ['', '!', '!!'];
+
+function validDate(s) {
+  const d = new Date(s + 'T00:00');
+  return !isNaN(d) && ymd(d) === s ? s : '';
+}
+
+function takeDate(s) {
+  let m = s.match(/^(\d{4}-\d{2}-\d{2})\b\s*[:\-–—]?\s*/);
+  let date = m && validDate(m[1]);
+  if (!m) {
+    m = s.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\b\s*[:\-–—]?\s*/);
+    date = m && validDate(`${m[3] || new Date().getFullYear()}-${pad(m[2])}-${pad(m[1])}`);
+  }
+  return date ? [date, s.slice(m[0].length)] : ['', s];
+}
+
+function takePrio(s) {
+  let prio = 0;
+  s = s.replace(/(^|\s)(!{1,3})(?=\s|$)/g, (_, sp, bangs) => { prio = Math.max(prio, Math.min(bangs.length, 2)); return sp; });
+  return [prio, s.replace(/\s+/g, ' ').trim()];
+}
+
+function parseLine(line) {
+  let s = line.trim().replace(/^([-*•]|\d+[.)]|\[[ xX]?\])\s+/, '').trim();
+  let prio, date;
+  [prio, s] = takePrio(s);
+  [date, s] = takeDate(s);
+  s = s.trim();
+  return s ? { id: uid(), text: s, date, done: false, prio } : null;
+}
+
+function parseImport(text) {
+  const plans = [];
+  let cur = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const hm = line.match(/^#+\s*(.*)$/);
+    if (hm) {
+      let s = hm[1], due = '', prio;
+      const dm = s.match(/(?:^|\s)@(\S+)/);
+      if (dm) { due = takeDate(dm[1])[0]; s = s.replace(dm[0], ' '); }
+      [prio, s] = takePrio(s);
+      if (s) plans.push((cur = { title: s, due, prio, items: [] }));
+      continue;
+    }
+    const it = parseLine(line);
+    if (!it) continue;
+    if (!cur) plans.push((cur = { title: 'General', due: '', prio: 0, items: [] }));
+    cur.items.push(it);
+  }
+  return plans;
+}
+
+const findByTitle = (title) => data.plans.find((p) => !p.archived && p.title.toLowerCase() === title.toLowerCase());
+
+function importPlans(parsed) {
+  for (const pp of parsed) {
+    const p = findByTitle(pp.title);
+    if (p) {
+      p.items.push(...pp.items);
+      if (pp.due) p.due = pp.due;
+      if (pp.prio) p.prio = pp.prio;
+    } else {
+      data.plans.push({ id: uid(), title: pp.title, due: pp.due, prio: pp.prio, archived: false, items: pp.items });
+    }
+  }
+}
+
+const prioTag = (n) => n ? h('span', { class: 'ptag p' + n, title: PRIO_LABEL[n] }, PRIO_MARK[n]) : null;
+
+function renderSide() {
+  const plans = data.plans.filter((p) => showArchived || !p.archived).sort((a, b) => (b.prio || 0) - (a.prio || 0));
+  const t = today();
+  const dueCount = data.plans.filter((p) => !p.archived).flatMap((p) => p.items).filter((i) => !i.done && i.date && i.date <= t).length;
+  const input = h('input', { type: 'text', placeholder: '+ New plan', onkeydown: (e) => {
+    if (e.key === 'Enter' && e.target.value.trim()) {
+      const p = { id: uid(), title: e.target.value.trim(), due: '', archived: false, items: [] };
+      data.plans.push(p); view = p.id; save();
+    }
+  } });
+  fill($('side'),
+    h('h1', {}, 'Plans'),
+    h('div', { class: 'nav', onclick: () => { view = 'focus'; render(); } }, h('span', {}, '🎯 Now')),
+    h('div', { class: 'nav' + (view === 'today' ? ' sel' : ''), onclick: () => { view = 'today'; render(); } },
+      h('span', {}, '📅 Today'), dueCount ? h('span', { class: 'pct' }, String(dueCount)) : null),
+    h('div', { class: 'nav' + (view === 'calendar' ? ' sel' : ''), onclick: () => { view = 'calendar'; render(); } }, h('span', {}, '🗓 Calendar')),
+    h('div', { class: 'nav' + (view === 'import' ? ' sel' : ''), onclick: () => { view = 'import'; render(); } }, h('span', {}, '📥 Bulk add')),
+    h('div', { class: 'sep' }),
+    plans.map((p) => h('div', { class: 'nav' + (view === p.id ? ' sel' : '') + (p.archived ? ' archived' : ''), onclick: () => { view = p.id; confirmDelete = false; render(); } },
+      h('span', {}, h('i', { class: 'dot', style: `background:${planColor(p)}` }), prioTag(p.prio), p.title), h('span', { class: 'pct' }, progress(p) + '%'))),
+    input,
+    h('label', { class: 'small', style: 'margin-top:auto' },
+      h('input', { type: 'checkbox', checked: showArchived, onchange: (e) => { showArchived = e.target.checked; render(); } }), ' Show archived'),
+    h('div', { class: 'nav small' + (view === 'setup' ? ' sel' : ''), onclick: () => { view = 'setup'; render(); } }, '⚙︎ Connection'),
+  );
+}
+
+function renderSetup() {
+  const token = h('input', { type: 'text', placeholder: 'ghp_…', value: cfg.token, autocomplete: 'off' });
+  const gist = h('input', { type: 'text', placeholder: 'Leave empty to create a new Gist', value: cfg.gist, autocomplete: 'off' });
+  const connect = async () => {
+    cfg.token = token.value.trim();
+    cfg.gist = gist.value.trim().replace(/^.*\//, '');
+    if (!cfg.token) return status('Token is required', true);
+    try {
+      if (!cfg.gist) {
+        status('Creating Gist…');
+        const g = await gh('', { method: 'POST', body: JSON.stringify({ public: false, description: 'plan-tracker', files: { [GIST_FILE]: { content: JSON.stringify({ plans: [] }, null, 2) } } }) });
+        cfg.gist = g.id;
+      }
+    } catch (e) {
+      return status(e.message, true);
+    }
+    localStorage.setItem('pt_token', cfg.token);
+    localStorage.setItem('pt_gist', cfg.gist);
+    load();
+  };
+  const disconnect = () => {
+    localStorage.removeItem('pt_token');
+    localStorage.removeItem('pt_gist');
+    cfg.token = cfg.gist = '';
+    data = { plans: [] };
+    render();
+  };
+  fill($('main'),
+    h('div', { class: 'title' }, 'Connection'),
+    h('p', { class: 'small' }, 'Plans are stored in a secret Gist on your GitHub account. Enter the same token and Gist ID once on each device.'),
+    h('div', { class: 'form' },
+      h('label', {}, 'GitHub token (classic token, ', h('code', {}, 'gist'), ' scope only) · ',
+        h('a', { href: 'https://github.com/settings/tokens/new?scopes=gist&description=plan-tracker', target: '_blank', rel: 'noopener' }, 'create one')),
+      token,
+      h('label', {}, 'Gist ID'),
+      gist,
+      h('div', { class: 'actions' },
+        h('button', { class: 'primary', onclick: connect }, cfg.gist ? 'Connect' : 'Connect / create Gist'),
+        cfg.token ? h('button', { class: 'danger', onclick: disconnect }, 'Sign out on this device') : null,
+      ),
+    ),
+    cfg.gist ? h('p', { class: 'small' }, 'Gist ID for your other devices: ', h('code', {}, cfg.gist)) : null,
+  );
+}
+
+function itemRow(item, plan, withPlanName) {
+  const late = !item.done && item.date && item.date < today();
+  const idx = plan.items.indexOf(item);
+  const move = (d) => { const j = idx + d; if (j < 0 || j >= plan.items.length) return; [plan.items[idx], plan.items[j]] = [plan.items[j], plan.items[idx]]; save(); };
+  const prio = item.prio || 0;
+  return h('div', { class: 'item' + (item.done ? ' done' : '') + (late ? ' late' : '') },
+    h('input', { type: 'checkbox', checked: item.done, onchange: (e) => { item.done = e.target.checked; save(); } }),
+    h('button', { class: 'prio p' + prio, title: `Priority: ${PRIO_LABEL[prio]} (click to change)`, onclick: () => { item.prio = (prio + 1) % 3; save(); } }, PRIO_MARK[prio] || '·'),
+    h('input', { type: 'text', value: item.text, onchange: (e) => { item.text = e.target.value.trim() || item.text; save(); } }),
+    withPlanName ? h('span', { class: 'plan', onclick: () => { view = plan.id; render(); } }, plan.title) : null,
+    h('input', { type: 'date', value: item.date || '', onchange: (e) => { item.date = e.target.value; save(); } }),
+    withPlanName ? null : [
+      h('button', { class: 'icon', title: 'Move up', onclick: () => move(-1) }, '↑'),
+      h('button', { class: 'icon', title: 'Move down', onclick: () => move(1) }, '↓'),
+      h('button', { class: 'icon', title: 'Delete', onclick: () => { plan.items.splice(idx, 1); save(); } }, '✕'),
+    ],
+  );
+}
+
+function renderToday() {
+  const t = today();
+  const week = addDays(t, 7);
+  const open = data.plans.filter((p) => !p.archived).flatMap((p) => p.items.filter((i) => !i.done).map((i) => ({ i, p })));
+  const byPrio = (a, b) => (b.i.prio || 0) - (a.i.prio || 0);
+  const rows = open.filter((r) => r.i.date).sort((a, b) => byPrio(a, b) || a.i.date.localeCompare(b.i.date));
+  const undated = open.filter((r) => !r.i.date && r.i.prio).sort(byPrio);
+  const group = (title, list, cls) => [
+    h('h2', { class: cls || '' }, title),
+    list.length ? list.map(({ i, p }) => itemRow(i, p, true)) : h('div', { class: 'empty' }, '—'),
+  ];
+  fill($('main'),
+    h('div', { class: 'title' }, 'Today · ' + fmt(t)),
+    group('Overdue', rows.filter((r) => r.i.date < t), 'bad'),
+    group('Today', rows.filter((r) => r.i.date === t)),
+    group('Next 7 days', rows.filter((r) => r.i.date > t && r.i.date <= week)),
+    group('Priority · no date', undated),
+  );
+}
+
+function renderPlan(p) {
+  const pct = progress(p);
+  const done = p.items.filter((i) => i.done).length;
+  const left = p.due ? daysBetween(today(), p.due) : null;
+  const text = h('input', { type: 'text', placeholder: 'New step…' });
+  const date = h('input', { type: 'date' });
+  const addOne = () => { const it = parseLine(text.value); if (!it) return; if (date.value) it.date = date.value; p.items.push(it); save(); setTimeout(() => document.querySelector('.add input[type=text]')?.focus()); };
+  text.addEventListener('keydown', (e) => { if (e.key === 'Enter') addOne(); });
+  const bulk = h('textarea', { placeholder: 'One step per line. Date at the start, priority (! or !!) anywhere, both optional:\n2026-10-14 IAM and security !!\n15.10 EC2, S3, RDS\n- Practice exam 1 !' });
+
+  fill($('main'),
+    h('input', { class: 'title', type: 'text', value: p.title, onchange: (e) => { p.title = e.target.value.trim() || p.title; save(); } }),
+    h('div', { class: 'meta' },
+      h('span', { class: 'small' }, 'Target date'),
+      h('input', { type: 'date', value: p.due || '', onchange: (e) => { p.due = e.target.value; save(); } }),
+      left == null ? null : h('span', { class: 'small', style: left < 0 ? 'color:var(--bad)' : '' }, left > 0 ? `${left} days left` : left === 0 ? 'Today!' : `${-left} days overdue`),
+      h('span', { class: 'small' }, `${done}/${p.items.length} steps · ${pct}%`),
+      h('select', { onchange: (e) => { p.prio = Number(e.target.value); save(); } },
+        PRIO_LABEL.map((l, n) => h('option', { value: String(n), selected: (p.prio || 0) === n }, n ? `${PRIO_MARK[n]} ${l}` : l))),
+    ),
+    h('div', { class: 'bar' }, h('div', { style: `width:${pct}%` })),
+    p.items.length ? p.items.map((i) => itemRow(i, p, false)) : h('div', { class: 'empty' }, 'No steps yet.'),
+    h('div', { class: 'add' }, text, date, h('button', { class: 'primary', onclick: addOne }, 'Add')),
+    h('details', {},
+      h('summary', {}, 'Add several steps (e.g. paste a plan from Claude)'),
+      bulk,
+      h('button', { class: 'primary', style: 'margin-top:6px', onclick: () => {
+        const items = bulk.value.split('\n').map(parseLine).filter(Boolean);
+        if (items.length) { p.items.push(...items); save(); }
+      } }, 'Add lines'),
+    ),
+    h('div', { class: 'actions' },
+      h('button', { onclick: () => { p.archived = !p.archived; save(); } }, p.archived ? 'Unarchive' : 'Archive'),
+      h('button', { class: 'danger', onclick: () => {
+        if (!confirmDelete) { confirmDelete = true; render(); return; }
+        data.plans = data.plans.filter((x) => x !== p); view = 'today'; confirmDelete = false; save();
+      } }, confirmDelete ? 'Sure? Click again' : 'Delete plan'),
+    ),
+  );
+}
+
+const IMPORT_EXAMPLE = `# AWS Cloud Practitioner @29.10 !!
+- 14.10 IAM and security !!
+- 16.10 EC2, S3, RDS
+- Practice exam 1 !
+
+# Moving house @05.11
+- Get quotes from movers !!
+- Pack the boxes
+
+# Reading
+- Finish Atomic Habits`;
+
+const claudePrompt = () => `Rewrite the plans I describe below in this format. Return only the formatted text, no explanations.
+
+Rules:
+- Each plan starts with a "# Plan name" line.
+- If the plan has a target or end date, add @DD.MM at the end of the title (e.g. # AWS exam @29.10).
+- Every line below it is one step: "- step". If the step has a day, put DD.MM at the start (e.g. - 14.10 Study IAM).
+- Priority: add " !" to important items and " !!" to urgent ones. Plan titles can have it too.
+- Break big tasks into clear steps of at most 1-2 hours. Spread the dates realistically.
+- Today's date: ${fmt(today())} (${today()}).
+
+Example:
+${IMPORT_EXAMPLE}
+
+My plans:
+`;
+
+let importText = '';
+
+function renderImport() {
+  const preview = h('div', { class: 'preview' });
+  const showPreview = () => {
+    const parsed = parseImport(importText);
+    const steps = parsed.reduce((n, pp) => n + pp.items.length, 0);
+    fill(preview,
+      parsed.length ? parsed.map((pp) => h('div', { class: 'pv' },
+        h('div', { class: 'pvh' }, prioTag(pp.prio), h('b', {}, pp.title),
+          pp.due ? h('span', { class: 'small' }, ' · 🎯 ' + fmt(pp.due)) : null,
+          h('span', { class: 'small' }, findByTitle(pp.title) ? ' · will be added to the existing plan' : ' · new plan')),
+        pp.items.map((i) => h('div', { class: 'pvi' }, prioTag(i.prio), i.text, i.date ? h('span', { class: 'small' }, ' · ' + fmt(i.date)) : null)),
+      )) : h('div', { class: 'empty' }, 'A preview appears here as you type.'),
+      parsed.length ? h('button', { class: 'primary', onclick: () => {
+        importPlans(parsed);
+        importText = '';
+        view = 'calendar';
+        save();
+      } }, `Add ${parsed.length} ${parsed.length === 1 ? 'plan' : 'plans'}, ${steps} ${steps === 1 ? 'step' : 'steps'}`) : null,
+    );
+  };
+  const ta = h('textarea', { class: 'big', value: importText, placeholder: IMPORT_EXAMPLE, oninput: (e) => { importText = e.target.value; showPreview(); } });
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(claudePrompt());
+      status('Copied. Paste it to Claude and add your plans at the end.');
+    } catch {
+      status('Could not copy. Copy the text below by hand.', true);
+    }
+    setTimeout(() => status(DEMO ? DEMO_MSG : ''), 3000);
+  };
+  fill($('main'),
+    h('div', { class: 'title' }, 'Bulk add'),
+    h('div', { class: 'help small' },
+      h('div', {}, h('code', {}, '# Plan name'), ' starts a new plan. If a plan with that name exists, the steps are added to it.'),
+      h('div', {}, h('code', {}, '@29.10'), ' in the title: the plan\'s target date (day.month).'),
+      h('div', {}, h('code', {}, '- 14.10 step'), ' is one step. The date at the start is optional (', h('code', {}, '2026-10-14'), ' also works).'),
+      h('div', {}, h('code', {}, '!'), ' important, ', h('code', {}, '!!'), ' urgent. Works on plans and steps.'),
+    ),
+    h('div', { class: 'importgrid' },
+      h('div', {}, ta,
+        h('div', { class: 'actions', style: 'margin-top:8px' },
+          h('button', { onclick: () => { importText = IMPORT_EXAMPLE; ta.value = importText; showPreview(); } }, 'Fill in example'),
+          h('button', { onclick: copy }, '📋 Copy instructions for Claude'))),
+      preview,
+    ),
+    h('details', {}, h('summary', {}, 'Show Claude instructions'), h('pre', { class: 'prompt' }, claudePrompt())),
+  );
+  showPreview();
+}
+
+const PALETTE = ['#2f6fed', '#e0803a', '#2e9e5b', '#a855c7', '#d64545', '#1aa3a3', '#b8912a'];
+const planColor = (p) => PALETTE[data.plans.indexOf(p) % PALETTE.length];
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+let calMode = 'week';
+let calAnchor = today();
+
+const weekStart = (s) => { const d = new Date(s + 'T00:00'); return addDays(s, -((d.getDay() + 6) % 7)); };
+
+function renderCalendar() {
+  const t = today();
+  const a = new Date(calAnchor + 'T00:00');
+  let start, end, label;
+  if (calMode === 'week') {
+    start = weekStart(calAnchor);
+    end = addDays(start, 6);
+    const s = new Date(start + 'T00:00'), e = new Date(end + 'T00:00');
+    label = `${s.getDate()} ${s.toLocaleDateString('en-GB', { month: 'short' })} – ${e.getDate()} ${e.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`;
+  } else {
+    const first = ymd(new Date(a.getFullYear(), a.getMonth(), 1));
+    const last = ymd(new Date(a.getFullYear(), a.getMonth() + 1, 0));
+    start = weekStart(first);
+    end = addDays(weekStart(last), 6);
+    label = a.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  }
+  const shift = (dir) => {
+    if (calMode === 'week') calAnchor = addDays(calAnchor, 7 * dir);
+    else calAnchor = ymd(new Date(a.getFullYear(), a.getMonth() + dir, 1));
+    render();
+  };
+  const plans = data.plans.filter((p) => !p.archived);
+  const byDay = {};
+  for (const p of plans) {
+    for (const i of p.items) if (i.date && i.date >= start && i.date <= end) (byDay[i.date] ||= []).push({ i, p });
+    if (p.due && p.due >= start && p.due <= end) (byDay[p.due] ||= []).push({ due: true, p });
+  }
+  const chip = ({ i, p, due }) => due
+    ? h('div', { class: 'chip due', style: `--c:${planColor(p)}`, title: p.title, onclick: () => { view = p.id; render(); } }, h('span', { class: 'txt' }, '🎯 ' + p.title))
+    : h('div', { class: 'chip' + (i.done ? ' done' : '') + (!i.done && i.date < t ? ' late' : ''), style: `--c:${planColor(p)}`, title: `${p.title}: ${i.text}` },
+      h('input', { type: 'checkbox', checked: i.done, onchange: (e) => { i.done = e.target.checked; save(); } }),
+      h('span', { class: 'txt', onclick: () => { view = p.id; render(); } }, prioTag(i.prio), i.text));
+  const days = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) days.push(d);
+  const month = a.getMonth();
+  fill($('main'),
+    h('div', { class: 'calhead' },
+      h('div', { class: 'title' }, label),
+      h('div', { class: 'seg' },
+        h('button', { class: calMode === 'week' ? 'on' : '', onclick: () => { calMode = 'week'; render(); } }, 'Week'),
+        h('button', { class: calMode === 'month' ? 'on' : '', onclick: () => { calMode = 'month'; render(); } }, 'Month')),
+      h('div', { class: 'seg' },
+        h('button', { onclick: () => shift(-1) }, '‹'),
+        h('button', { onclick: () => { calAnchor = t; render(); } }, 'Today'),
+        h('button', { onclick: () => shift(1) }, '›')),
+    ),
+    h('div', { class: 'cal ' + calMode },
+      WEEKDAYS.map((w) => h('div', { class: 'wd' }, w)),
+      days.map((d) => {
+        const dt = new Date(d + 'T00:00');
+        const list = (byDay[d] || []).sort((x, y) => (y.due ? 1 : 0) - (x.due ? 1 : 0) || (y.i?.prio || 0) - (x.i?.prio || 0));
+        const openWeek = (e) => {
+          if (calMode !== 'month' || (e.target.closest('.chip') && !matchMedia('(max-width: 700px)').matches)) return;
+          calAnchor = d; calMode = 'week'; render();
+        };
+        return h('div', { class: 'day' + (d === t ? ' today' : '') + (calMode === 'month' && dt.getMonth() !== month ? ' out' : ''), onclick: openWeek },
+          h('div', { class: 'dn' }, h('span', { class: 'wdm' }, WEEKDAYS[(dt.getDay() + 6) % 7] + ' '), String(dt.getDate())),
+          list.map(chip));
+      }),
+    ),
+    h('div', { class: 'legend' }, plans.map((p) => h('span', {}, h('i', { class: 'dot', style: `background:${planColor(p)}` }), p.title))),
+  );
+}
+
+const skipped = new Set();
+let focusStart = null;
+
+function nextSteps() {
+  const t = today();
+  const rows = [];
+  for (const p of data.plans.filter((x) => !x.archived)) {
+    let firstUndated = true;
+    p.items.forEach((i, idx) => {
+      if (i.done) return;
+      let bucket;
+      if (i.date && i.date <= t) bucket = 0;
+      else if (!i.date && i.prio) bucket = 1;
+      else if (!i.date && firstUndated) bucket = 2;
+      else if (i.date) bucket = 3;
+      else return;
+      if (!i.date) firstUndated = false;
+      rows.push({ i, p, bucket, idx });
+    });
+  }
+  return rows.sort((a, b) => a.bucket - b.bucket || (b.i.prio || 0) - (a.i.prio || 0) || (b.p.prio || 0) - (a.p.prio || 0)
+    || (a.i.date || '').localeCompare(b.i.date || '') || a.idx - b.idx);
+}
+
+function renderFocus() {
+  const t = today();
+  const list = nextSteps();
+  if (list.length && list.every((r) => skipped.has(r.i.id))) skipped.clear();
+  const cur = list.find((r) => !skipped.has(r.i.id));
+  const allPlans = h('button', { class: 'ghost ftop', onclick: () => { view = 'today'; render(); } }, '☰ All plans');
+  if (!cur) {
+    return fill($('main'), allPlans, h('div', { class: 'fcard' },
+      h('div', { class: 'ftask' }, 'Nothing to do right now.'),
+      h('button', { class: 'big', onclick: () => { view = 'import'; render(); } }, 'Add a plan')));
+  }
+  const { i, p } = cur;
+  const running = focusStart && focusStart.id === i.id;
+  const when = !i.date ? '' : i.date < t ? 'overdue' : i.date === t ? 'today' : fmt(i.date);
+  const todayLeft = list.filter((r) => r.bucket === 0 && r !== cur).length;
+  fill($('main'),
+    allPlans,
+    h('div', { class: 'fcard' },
+      cur.bucket === 3 ? h('div', { class: 'fnote', style: 'margin:0 0 18px' }, 'Nothing left for today. Up next:') : null,
+      h('div', { class: 'fmeta' }, h('i', { class: 'dot', style: `background:${planColor(p)}` }), p.title, when ? ' · ' + when : ''),
+      h('div', { class: 'ftask' }, prioTag(i.prio), i.text),
+      running ? h('div', { class: 'ftimer', id: 'ftimer' }, '0:00') : null,
+      h('div', { class: 'fbtns' },
+        running ? null : h('button', { class: 'primary big', onclick: () => { focusStart = { id: i.id, at: Date.now() }; render(); } }, 'Start'),
+        h('button', { class: running ? 'primary big' : 'big', onclick: () => { i.done = true; focusStart = null; save(); } }, '✓ Done'),
+      ),
+      h('button', { class: 'ghost', style: 'margin-top:14px', onclick: () => { skipped.add(i.id); focusStart = null; render(); } }, 'Not now'),
+      todayLeft ? h('div', { class: 'fnote' }, `${todayLeft} more for today`) : null,
+    ),
+  );
+  tick();
+}
+
+function tick() {
+  const el = $('ftimer');
+  if (!el || !focusStart) return;
+  const s = Math.floor((Date.now() - focusStart.at) / 1000);
+  el.textContent = `${Math.floor(s / 60)}:${pad(s % 60)}`;
+}
+setInterval(tick, 1000);
+
+function render() {
+  $('main').classList.toggle('wide', view === 'calendar');
+  $('main').classList.toggle('focus', view === 'focus');
+  if (!DEMO && (view === 'setup' || !cfg.gist)) {
+    $('side').hidden = !cfg.gist;
+    if (cfg.gist) renderSide();
+    return renderSetup();
+  }
+  $('side').hidden = view === 'focus';
+  if (view === 'focus') return renderFocus();
+  renderSide();
+  if (view === 'calendar') return renderCalendar();
+  if (view === 'import') return renderImport();
+  const p = view !== 'today' && findPlan(view);
+  if (view !== 'today' && !p) view = 'today';
+  p ? renderPlan(p) : renderToday();
+}
+
+load();
+</script>
+</body>
+</html>
