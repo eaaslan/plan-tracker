@@ -183,11 +183,15 @@ let legacy = false;
 const cfg = { token: localStorage.getItem('pt_token') || '', gist: localStorage.getItem('pt_gist') || '' };
 let dirty = false;
 let saveTimer;
+let loaded = false;
+let gen = 0;
+let inflight = null;
 
 async function gh(path, opts = {}) {
   const r = await fetch('https://api.github.com/gists' + path, {
+    cache: 'no-store',
     ...opts,
-    keepalive: !!opts.body && opts.body.length < 60000,
+    keepalive: !!opts.body && new Blob([opts.body]).size < 60000,
     headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
   });
   if (!r.ok) throw new Error(r.status === 401 ? 'Invalid token' : r.status === 404 ? 'Gist not found' : `GitHub error ${r.status}`);
@@ -219,20 +223,26 @@ function demoData() {
 async function load() {
   if (DEMO) { data = demoData(); view = 'focus'; status(DEMO_MSG); return render(); }
   if (!cfg.token || !cfg.gist) { view = 'setup'; return render(); }
+  while (inflight) await inflight;
+  const startGen = gen;
+  const gist = cfg.gist;
   status('Loading…');
   try {
-    const files = (await gh('/' + cfg.gist)).files;
-    legacy = !files[GIST_FILE] && !!files[LEGACY_FILE];
+    const files = (await gh('/' + gist)).files;
     const f = files[GIST_FILE] || files[LEGACY_FILE];
     if (!f) throw new Error(`${GIST_FILE} is missing from the Gist`);
-    const json = JSON.parse(f.truncated ? await (await fetch(f.raw_url)).text() : f.content);
+    const json = JSON.parse(f.truncated ? await (await fetch(f.raw_url, { cache: 'no-store' })).text() : f.content);
     if (!Array.isArray(json.plans)) throw new Error('The Gist content is not in the expected format');
+    if (gist !== cfg.gist) return;
+    legacy = !files[GIST_FILE] && !!files[LEGACY_FILE];
+    if (loaded && (gen !== startGen || dirty)) return status(dirty ? 'Saving…' : '');
     data = json;
+    loaded = true;
     if (view === 'setup') view = 'focus';
     status('');
   } catch (e) {
     status(e.message, true);
-    view = 'setup';
+    if (!loaded) view = 'setup';
   }
   render();
 }
@@ -240,6 +250,8 @@ async function load() {
 function save() {
   render();
   if (DEMO) return;
+  if (!loaded) return status('Not connected to the Gist yet. This change was not saved.', true);
+  gen++;
   dirty = true;
   status('Saving…');
   clearTimeout(saveTimer);
@@ -248,23 +260,29 @@ function save() {
 
 async function flush() {
   clearTimeout(saveTimer);
-  if (!dirty) return;
+  while (inflight) await inflight;
+  if (!dirty || !loaded) return;
   dirty = false;
-  try {
-    const files = { [GIST_FILE]: { content: JSON.stringify(data, null, 2) } };
-    if (legacy) files[LEGACY_FILE] = null;
-    await gh('/' + cfg.gist, { method: 'PATCH', body: JSON.stringify({ files }) });
-    legacy = false;
-    if (!dirty) status('');
-  } catch (e) {
-    dirty = true;
-    status('Could not save: ' + e.message, true);
-  }
+  const files = { [GIST_FILE]: { content: JSON.stringify(data, null, 2) } };
+  if (legacy) files[LEGACY_FILE] = null;
+  inflight = gh('/' + cfg.gist, { method: 'PATCH', body: JSON.stringify({ files }) }).then(
+    () => { legacy = false; if (!dirty) status(''); },
+    (e) => { dirty = true; status('Could not save: ' + e.message, true); },
+  ).finally(() => { inflight = null; });
+  await inflight;
+}
+
+function resetSync() {
+  clearTimeout(saveTimer);
+  dirty = false;
+  loaded = false;
+  legacy = false;
+  data = { plans: [] };
 }
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flush();
-  else if (!dirty && !DEMO && view !== 'setup') load();
+  else if (!dirty && !DEMO && loaded && view !== 'setup') load();
 });
 
 function status(msg, bad) {
@@ -288,8 +306,10 @@ function takeDate(s) {
   let m = s.match(/^(\d{4}-\d{2}-\d{2})\b\s*[:\-–—]?\s*/);
   let date = m && validDate(m[1]);
   if (!m) {
-    m = s.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\b\s*[:\-–—]?\s*/);
-    date = m && validDate(`${m[3] || new Date().getFullYear()}-${pad(m[2])}-${pad(m[1])}`);
+    m = s.match(/^(\d{1,2})[./](\d{2})(?:[./](\d{4}))?(?=\s|$|[:\-–—])\s*[:\-–—]?\s*/);
+    const year = m && (m[3] || new Date().getFullYear());
+    date = m && validDate(`${year}-${m[2]}-${pad(m[1])}`);
+    if (date && !m[3] && daysBetween(date, today()) > 60) date = validDate(`${Number(year) + 1}-${m[2]}-${pad(m[1])}`);
   }
   return date ? [date, s.slice(m[0].length)] : ['', s];
 }
@@ -300,11 +320,11 @@ function takePrio(s) {
   return [prio, s.replace(/\s+/g, ' ').trim()];
 }
 
-function parseLine(line) {
+function parseLine(line, keepDate = false) {
   let s = line.trim().replace(/^([-*•]|\d+[.)]|\[[ xX]?\])\s+/, '').trim();
-  let prio, date;
+  let prio, date = '';
   [prio, s] = takePrio(s);
-  [date, s] = takeDate(s);
+  if (!keepDate) [date, s] = takeDate(s);
   s = s.trim();
   return s ? { id: uid(), text: s, date, done: false, prio } : null;
 }
@@ -380,27 +400,32 @@ function renderSetup() {
   const token = h('input', { type: 'text', placeholder: 'ghp_…', value: cfg.token, autocomplete: 'off' });
   const gist = h('input', { type: 'text', placeholder: 'Leave empty to create a new Gist', value: cfg.gist, autocomplete: 'off' });
   const connect = async () => {
-    cfg.token = token.value.trim();
-    cfg.gist = gist.value.trim().replace(/^.*\//, '');
-    if (!cfg.token) return status('Token is required', true);
+    const newToken = token.value.trim();
+    let newGist = gist.value.trim().replace(/^.*\//, '');
+    if (!newToken) return status('Token is required', true);
+    if (loaded) await flush();
+    cfg.token = newToken;
     try {
-      if (!cfg.gist) {
+      if (!newGist) {
         status('Creating Gist…');
         const g = await gh('', { method: 'POST', body: JSON.stringify({ public: false, description: 'plan-tracker', files: { [GIST_FILE]: { content: JSON.stringify({ plans: [] }, null, 2) } } }) });
-        cfg.gist = g.id;
+        newGist = g.id;
       }
     } catch (e) {
       return status(e.message, true);
     }
+    resetSync();
+    cfg.gist = newGist;
     localStorage.setItem('pt_token', cfg.token);
     localStorage.setItem('pt_gist', cfg.gist);
     load();
   };
-  const disconnect = () => {
+  const disconnect = async () => {
+    if (loaded) await flush();
     localStorage.removeItem('pt_token');
     localStorage.removeItem('pt_gist');
     cfg.token = cfg.gist = '';
-    data = { plans: [] };
+    resetSync();
     render();
   };
   fill($('main'),
@@ -466,7 +491,7 @@ function renderPlan(p) {
   const left = p.due ? daysBetween(today(), p.due) : null;
   const text = h('input', { type: 'text', placeholder: 'New step…' });
   const date = h('input', { type: 'date' });
-  const addOne = () => { const it = parseLine(text.value); if (!it) return; if (date.value) it.date = date.value; p.items.push(it); save(); setTimeout(() => document.querySelector('.add input[type=text]')?.focus()); };
+  const addOne = () => { const it = parseLine(text.value, !!date.value); if (!it) return; if (date.value) it.date = date.value; p.items.push(it); save(); setTimeout(() => document.querySelector('.add input[type=text]')?.focus()); };
   text.addEventListener('keydown', (e) => { if (e.key === 'Enter') addOne(); });
   const bulk = h('textarea', { placeholder: 'One step per line. Date at the start, priority (! or !!) anywhere, both optional:\n2026-10-14 IAM and security !!\n15.10 EC2, S3, RDS\n- Practice exam 1 !' });
 
@@ -721,9 +746,9 @@ setInterval(tick, 1000);
 function render() {
   $('main').classList.toggle('wide', view === 'calendar');
   $('main').classList.toggle('focus', view === 'focus');
-  if (!DEMO && (view === 'setup' || !cfg.gist)) {
-    $('side').hidden = !cfg.gist;
-    if (cfg.gist) renderSide();
+  if (!DEMO && (view === 'setup' || !cfg.gist || !loaded)) {
+    $('side').hidden = !loaded;
+    if (loaded) renderSide();
     return renderSetup();
   }
   $('side').hidden = view === 'focus';
