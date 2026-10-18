@@ -16,7 +16,7 @@
   [hidden] { display:none !important; }
   body { margin:0; font:15px/1.45 -apple-system, system-ui, sans-serif; background:var(--bg); color:var(--ink); display:flex; min-height:100vh; }
   input, textarea, button { font:inherit; color:inherit; }
-  input[type=text], input[type=date], textarea { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:5px 8px; }
+  input[type=text], input[type=search], input[type=date], textarea { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:5px 8px; }
   button { background:none; border:1px solid var(--line); border-radius:6px; padding:4px 10px; cursor:pointer; }
   button:hover { border-color:var(--acc); }
   button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
@@ -57,6 +57,25 @@
   .notesbox { margin:0 0 14px; }
   .notesbox.view { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:14px; line-height:1.5; cursor:text; word-break:break-word; }
   textarea.notes { min-height:120px; margin:0; font-size:14px; }
+  input[type=search] { width:100%; margin-bottom:14px; }
+  .resgrid { display:grid; grid-template-columns:230px minmax(0, 1fr); gap:24px; align-items:start; }
+  .resnav { margin:0; position:sticky; top:12px; max-height:calc(100vh - 24px); overflow:auto; }
+  .resnav summary { margin-bottom:6px; }
+  .resdir { font-size:12px; color:var(--muted); margin:12px 0 2px; text-transform:uppercase; letter-spacing:.04em; }
+  .mdbody { max-width:820px; line-height:1.55; font-size:15px; word-break:break-word; min-width:0; }
+  .mdbody p { margin:8px 0; }
+  .mdh { font-weight:650; margin:22px 0 6px; }
+  .mdh1 { font-size:22px; margin-top:4px; }
+  .mdh2 { font-size:18px; }
+  .mdh3, .mdh4 { font-size:16px; }
+  .mdli { display:flex; gap:8px; margin:3px 0; }
+  .mdb { color:var(--muted); flex:none; min-width:10px; }
+  .mdq { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--muted); margin:4px 0; }
+  .tablewrap { overflow-x:auto; margin:10px 0; }
+  .mdbody table { border-collapse:collapse; font-size:14px; }
+  .mdbody th, .mdbody td { border:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top; }
+  .mdbody th { background:var(--card); }
+  .mdbody hr { border:none; border-top:1px solid var(--line); margin:16px 0; }
   .form { display:flex; flex-direction:column; gap:6px; max-width:520px; margin-top:12px; }
   .form .actions { margin-top:10px; }
   a { color:var(--acc); }
@@ -148,6 +167,8 @@
     .importgrid { grid-template-columns:1fr; }
     .ftask { font-size:26px; }
     .matrix { grid-template-columns:1fr; }
+    .resgrid { grid-template-columns:1fr; gap:10px; }
+    .resnav { position:static; max-height:none; }
     main.focus { padding:24px; }
     textarea.big { min-height:220px; }
     .cal.week { grid-template-columns:1fr; }
@@ -161,7 +182,7 @@
     .cal.month .chip.done { opacity:.35; }
     .cal.month .chip > * { display:none !important; }
     .add input[type=text] { flex:1 1 100%; }
-    input[type=text], input[type=date], textarea { font-size:16px; }
+    input[type=text], input[type=search], input[type=date], textarea { font-size:16px; }
   }
 </style>
 </head>
@@ -202,7 +223,7 @@ const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((
 const GIST_FILE = 'plan-tracker.json';
 const LEGACY_FILE = 'plan-takip.json';
 let legacy = false;
-const cfg = { token: localStorage.getItem('pt_token') || '', gist: localStorage.getItem('pt_gist') || '' };
+const cfg = { token: localStorage.getItem('pt_token') || '', gist: localStorage.getItem('pt_gist') || '', repo: localStorage.getItem('pt_repo') || '' };
 let dirty = false;
 let saveTimer;
 let loaded = false;
@@ -413,7 +434,19 @@ function importPlans(parsed) {
 }
 
 const URL_RE = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)'\]])/g;
-const linkify = (text) => text.split(URL_RE).map((part, n) => n % 2 ? h('a', { href: part, target: '_blank', rel: 'noopener noreferrer' }, part) : part);
+const linkify = (text) => text.split(URL_RE).map((part, n) => n % 2 ? extLink(part, part) : part);
+
+function repoPathOf(url) {
+  if (!cfg.repo) return null;
+  const m = url.match(/^https?:\/\/github\.com\/([^/]+\/[^/#?]+)(?:\/(?:blob|tree)\/[^/]+\/([^#?]*))?\/?(?:[#?].*)?$/i);
+  return m && m[1].toLowerCase() === cfg.repo.toLowerCase() ? decodeURIComponent(m[2] || '') : null;
+}
+
+function extLink(href, ...kids) {
+  const rp = repoPathOf(href);
+  if (rp != null) return h('a', { href, onclick: (e) => { e.preventDefault(); openRes(rp); } }, ...kids);
+  return h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, ...kids);
+}
 
 const prioTag = (n) => n ? h('span', { class: 'ptag p1', title: PRIO_LABEL[1] }, PRIO_MARK[1]) : null;
 
@@ -435,6 +468,7 @@ function renderSide() {
     h('div', { class: 'nav' + (view === 'calendar' ? ' sel' : ''), onclick: () => { view = 'calendar'; render(); } }, h('span', {}, '🗓 Calendar')),
     h('div', { class: 'nav' + (view === 'ideas' ? ' sel' : ''), onclick: () => { view = 'ideas'; render(); } },
       h('span', {}, '💡 Ideas'), data.ideas.length ? h('span', { class: 'pct' }, String(data.ideas.length)) : null),
+    cfg.repo ? h('div', { class: 'nav' + (view === 'resources' ? ' sel' : ''), onclick: () => openRes('') }, h('span', {}, '📚 Resources')) : null,
     h('div', { class: 'nav' + (view === 'import' ? ' sel' : ''), onclick: () => { view = 'import'; render(); } }, h('span', {}, '📥 Bulk add')),
     h('div', { class: 'sep' }),
     plans.map((p) => h('div', { class: 'nav' + (view === p.id ? ' sel' : '') + (p.archived ? ' archived' : ''), onclick: () => { view = p.id; confirmDelete = false; render(); } },
@@ -449,7 +483,11 @@ function renderSide() {
 function renderSetup() {
   const token = h('input', { type: 'text', placeholder: 'ghp_…', value: cfg.token, autocomplete: 'off' });
   const gist = h('input', { type: 'text', placeholder: 'Leave empty to create a new Gist', value: cfg.gist, autocomplete: 'off' });
+  const repo = h('input', { type: 'text', placeholder: 'owner/repo (optional)', value: cfg.repo, autocomplete: 'off' });
   const connect = async () => {
+    cfg.repo = repo.value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '');
+    if (cfg.repo) localStorage.setItem('pt_repo', cfg.repo); else localStorage.removeItem('pt_repo');
+    res = null;
     const newToken = token.value.trim();
     let newGist = gist.value.trim().replace(/^.*\//, '');
     if (!newToken) return status('Token is required', true);
@@ -475,6 +513,7 @@ function renderSetup() {
     localStorage.removeItem('pt_token');
     localStorage.removeItem('pt_gist');
     cfg.token = cfg.gist = '';
+    res = null;
     resetSync();
     render();
   };
@@ -482,11 +521,14 @@ function renderSetup() {
     h('div', { class: 'title' }, 'Connection'),
     h('p', { class: 'small' }, 'Plans are stored in a secret Gist on your GitHub account. Enter the same token and Gist ID once on each device.'),
     h('div', { class: 'form' },
-      h('label', {}, 'GitHub token (classic token, ', h('code', {}, 'gist'), ' scope only) · ',
-        h('a', { href: 'https://github.com/settings/tokens/new?scopes=gist&description=plan-tracker', target: '_blank', rel: 'noopener' }, 'create one')),
+      h('label', {}, 'GitHub token · ',
+        h('a', { href: 'https://github.com/settings/personal-access-tokens/new', target: '_blank', rel: 'noopener' }, 'create a fine-grained token'),
+        ' with account permission Gists: read and write, and (for Resources) only your resources repo with Contents: read-only. A classic token with only the ', h('code', {}, 'gist'), ' scope works for plans.'),
       token,
       h('label', {}, 'Gist ID'),
       gist,
+      h('label', {}, 'Resources repo (optional): a GitHub repo of markdown notes to read in 📚 Resources'),
+      repo,
       h('div', { class: 'actions' },
         h('button', { class: 'primary', onclick: connect }, cfg.gist ? 'Connect' : 'Connect / create Gist'),
         cfg.token ? h('button', { class: 'danger', onclick: disconnect }, 'Sign out on this device') : null,
@@ -640,6 +682,168 @@ function renderIdeas() {
     data.ideas.length ? cats.flatMap((c) => [h('h2', {}, c), ...data.ideas.filter((i) => i.cat === c).map(row)])
       : h('div', { class: 'empty' }, 'No ideas yet. Bulk add also takes a "# Ideas: YouTube" block.'),
   );
+}
+
+let res = null;
+let resPath = '';
+let resQuery = '';
+
+async function ghRepo(path, raw) {
+  const r = await fetch(`https://api.github.com/repos/${cfg.repo}${path}`, {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${cfg.token}`, Accept: raw ? 'application/vnd.github.raw' : 'application/vnd.github+json' },
+  });
+  if (r.status === 404 || r.status === 403) throw new Error(`Can't read ${cfg.repo}. The token needs Contents: read-only access to this repo.`);
+  if (!r.ok) throw new Error(r.status === 401 ? 'Invalid token' : `GitHub error ${r.status}`);
+  return raw ? r.text() : r.json();
+}
+
+async function loadRes() {
+  res = { files: [], text: {}, loading: true };
+  render();
+  try {
+    const tree = await ghRepo('/git/trees/HEAD?recursive=1');
+    const dir = (f) => f.split('/').slice(0, -1).join('/');
+    const files = tree.tree.filter((t) => t.type === 'blob' && /\.md$/i.test(t.path) && t.path !== 'CLAUDE.md').map((t) => t.path)
+      .sort((a, b) => dir(a).localeCompare(dir(b)) || (b === 'README.md') - (a === 'README.md') || a.localeCompare(b));
+    const texts = await Promise.all(files.map((f) => ghRepo('/contents/' + f.split('/').map(encodeURIComponent).join('/'), true)));
+    res = { files, text: Object.fromEntries(files.map((f, n) => [f, texts[n]])) };
+  } catch (e) {
+    res = { files: [], text: {}, err: e.message };
+  }
+  if (view === 'resources') render();
+}
+
+function openRes(path) {
+  const clean = path.replace(/^\/+/, '').replace(/\/+$/, '');
+  resPath = clean;
+  resQuery = '';
+  view = 'resources';
+  render();
+  window.scrollTo(0, 0);
+}
+
+function resolveRel(from, rel) {
+  const parts = from.split('/').slice(0, -1);
+  for (const seg of rel.split('/')) {
+    if (seg === '..') parts.pop();
+    else if (seg && seg !== '.') parts.push(seg);
+  }
+  return parts.join('/');
+}
+
+function mdLink(href, label, from) {
+  if (/^https?:\/\//i.test(href)) return extLink(href, label);
+  if (href.startsWith('#') || /^[a-z]+:/i.test(href)) return h('span', {}, label);
+  const target = resolveRel(from, href.split('#')[0]);
+  return h('a', { href: '#', onclick: (e) => { e.preventDefault(); openRes(target); } }, label);
+}
+
+const INLINE_RE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\[([^\]]+)\]\(([^)\s]+)\))|(https?:\/\/[^\s<>()|]+[^\s<>().,;:!?'"\]|])/g;
+
+function mdInline(s, from) {
+  const out = [];
+  const re = new RegExp(INLINE_RE);
+  let last = 0, m;
+  while ((m = re.exec(s))) {
+    if (m.index > last) out.push(s.slice(last, m.index));
+    if (m[1]) out.push(h('code', {}, m[1].slice(1, -1)));
+    else if (m[2]) out.push(h('b', {}, ...mdInline(m[2].slice(2, -2), from)));
+    else if (m[3]) out.push(mdLink(m[5], mdInline(m[4], from), from));
+    else out.push(extLink(m[6], m[6]));
+    last = re.lastIndex;
+  }
+  if (last < s.length) out.push(s.slice(last));
+  return out.flat();
+}
+
+function mdBlocks(text, from) {
+  const out = [];
+  const lines = text.replace(/\r/g, '').split('\n');
+  let para = [];
+  const flushPara = () => { if (para.length) out.push(h('p', {}, ...mdInline(para.join(' '), from))); para = []; };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^```/.test(line.trim())) {
+      flushPara();
+      const code = [];
+      while (++i < lines.length && !/^```/.test(lines[i].trim())) code.push(lines[i]);
+      out.push(h('pre', { class: 'prompt' }, code.join('\n')));
+      continue;
+    }
+    const hm = line.match(/^(#{1,6})\s+(.*)$/);
+    if (hm) { flushPara(); out.push(h('div', { class: 'mdh mdh' + Math.min(hm[1].length, 4) }, ...mdInline(hm[2], from))); continue; }
+    if (/^\s*\|/.test(line)) {
+      flushPara();
+      const rows = [];
+      for (; i < lines.length && /^\s*\|/.test(lines[i]); i++) rows.push(lines[i]);
+      i--;
+      const cells = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+      const body = rows.filter((r) => !/^\s*\|?\s*:?-{2,}/.test(r));
+      out.push(h('div', { class: 'tablewrap' }, h('table', {}, body.map((r, n) => h('tr', {}, cells(r).map((c) => h(n ? 'td' : 'th', {}, ...mdInline(c, from))))))));
+      continue;
+    }
+    const lm = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+    if (lm) { flushPara(); out.push(h('div', { class: 'mdli', style: `margin-left:${Math.min(Math.floor(lm[1].length / 2), 4) * 18}px` }, h('span', { class: 'mdb' }, /\d/.test(lm[2]) ? lm[2] : '•'), h('span', {}, ...mdInline(lm[3], from)))); continue; }
+    if (/^\s*>/.test(line)) { flushPara(); out.push(h('div', { class: 'mdq' }, ...mdInline(line.replace(/^\s*>\s?/, ''), from))); continue; }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) { flushPara(); out.push(h('hr')); continue; }
+    if (!line.trim()) { flushPara(); continue; }
+    para.push(line.trim());
+  }
+  flushPara();
+  return out;
+}
+
+const resLabel = (f) => f.split('/').pop().replace(/\.md$/i, '');
+
+function renderResources() {
+  if (!cfg.repo) {
+    return fill($('main'), h('div', { class: 'title' }, 'Resources'),
+      h('p', { class: 'small' }, 'Add a GitHub repo of markdown notes (e.g. ', h('code', {}, 'you/resources'), ') under ',
+        h('a', { href: '#', onclick: (e) => { e.preventDefault(); view = 'setup'; render(); } }, '⚙︎ Connection'), ' to read it here.'));
+  }
+  if (DEMO) return fill($('main'), h('div', { class: 'title' }, 'Resources'), h('div', { class: 'empty' }, 'Resources need a real connection; the demo has none.'));
+  if (!res) { loadRes(); return; }
+  if (res.loading) return fill($('main'), h('div', { class: 'title' }, 'Resources'), h('div', { class: 'empty' }, 'Loading…'));
+  const head = h('div', { class: 'calhead' }, h('div', { class: 'title' }, '📚 Resources'),
+    h('button', { title: 'Reload from GitHub', onclick: () => { res = null; render(); } }, '↻'),
+    h('a', { class: 'small', href: `https://github.com/${cfg.repo}`, target: '_blank', rel: 'noopener' }, 'GitHub'));
+  if (res.err) return fill($('main'), head, h('div', { class: 'empty', style: 'color:var(--bad)' }, res.err));
+
+  const search = h('input', { type: 'search', placeholder: 'Search all resources…', value: resQuery, oninput: (e) => { resQuery = e.target.value; showBody(); } });
+  const body = h('div', { class: 'mdbody' });
+  const folders = [...new Set(res.files.map((f) => f.split('/').slice(0, -1).join('/')))];
+  const list = h('div', { class: 'reslist' }, folders.flatMap((d) => [
+    d ? h('div', { class: 'resdir' }, d.replace(/\//g, ' / ')) : null,
+    ...res.files.filter((f) => f.split('/').slice(0, -1).join('/') === d).map((f) =>
+      h('div', { class: 'nav small' + (f === resPath ? ' sel' : ''), onclick: () => openRes(f) }, resLabel(f))),
+  ]));
+
+  const showBody = () => {
+    const q = resQuery.trim().toLowerCase();
+    if (q.length >= 2) {
+      const hits = res.files.map((f) => [f, res.text[f].split('\n').filter((l) => l.toLowerCase().includes(q)).slice(0, 6)]).filter(([, ls]) => ls.length);
+      return fill(body, hits.length ? hits.map(([f, ls]) => h('div', { class: 'pv', style: 'margin-bottom:10px' },
+        h('div', { class: 'pvh' }, h('a', { href: '#', onclick: (e) => { e.preventDefault(); openRes(f); } }, h('b', {}, f))),
+        ls.map((l) => h('div', { class: 'pvi' }, ...mdInline(l.replace(/^[\s#>*|-]+/, ''), f)))))
+        : h('div', { class: 'empty' }, 'Nothing found.'));
+    }
+    let path = resPath;
+    if (!res.text[path]) {
+      const inDir = res.files.filter((f) => f.startsWith(path ? path + '/' : ''));
+      const index = [path ? path + '/README.md' : 'README.md', path ? path + '/links.md' : ''].find((f) => res.text[f]);
+      if (index && (!path || inDir.length)) path = index;
+      else if (path && inDir.length) {
+        return fill(body, h('div', { class: 'mdh mdh1' }, path), inDir.map((f) => h('div', { class: 'mdli' }, h('span', { class: 'mdb' }, '•'),
+          h('a', { href: '#', onclick: (e) => { e.preventDefault(); openRes(f); } }, f.slice(path.length + 1)))));
+      } else if (path) return fill(body, h('div', { class: 'empty' }, `Not found: ${path}`));
+      else path = res.files[0];
+    }
+    if (!path) return fill(body, h('div', { class: 'empty' }, 'No markdown files in this repo.'));
+    fill(body, h('div', { class: 'small', style: 'margin-bottom:8px' }, path), mdBlocks(res.text[path], path));
+  };
+  fill($('main'), head, search, h('div', { class: 'resgrid' }, h('details', { class: 'resnav', open: matchMedia('(min-width: 701px)').matches }, h('summary', {}, 'Files'), list), body));
+  showBody();
 }
 
 const IMPORT_EXAMPLE = `# AWS Cloud Practitioner @29.10 !
@@ -951,7 +1155,7 @@ function tick() {
 setInterval(tick, 1000);
 
 function render() {
-  $('main').classList.toggle('wide', view === 'calendar' || view === 'today');
+  $('main').classList.toggle('wide', view === 'calendar' || view === 'today' || view === 'resources');
   $('main').classList.toggle('focus', view === 'focus');
   if (!DEMO && (view === 'setup' || !cfg.gist || !loaded)) {
     $('side').hidden = !loaded;
@@ -964,6 +1168,7 @@ function render() {
   if (view === 'calendar') return renderCalendar();
   if (view === 'import') return renderImport();
   if (view === 'ideas') return renderIdeas();
+  if (view === 'resources') return renderResources();
   const p = view !== 'today' && findPlan(view);
   if (view !== 'today' && !p) view = 'today';
   p ? renderPlan(p) : renderToday();
