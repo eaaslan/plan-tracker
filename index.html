@@ -193,7 +193,7 @@
 <div id="toast"></div>
 <script>
 let data = { plans: [], ideas: [] };
-let view = 'focus';
+let view = location.hash === '#connection' ? 'setup' : 'focus';
 let showArchived = false;
 let confirmDelete = false;
 
@@ -292,7 +292,7 @@ async function load() {
     normalizePrio();
     const moved = rollover();
     rolled += moved;
-    if (view === 'setup') view = 'focus';
+    if (view === 'setup' && location.hash !== '#connection') view = 'focus';
     status('');
     if (moved) return save();
   } catch (e) {
@@ -511,6 +511,7 @@ function renderSetup() {
     }
     resetSync();
     cfg.gist = newGist;
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
     localStorage.setItem('pt_token', cfg.token);
     localStorage.setItem('pt_gist', cfg.gist);
     load();
