@@ -222,6 +222,8 @@ const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((
 
 const GIST_FILE = 'plan-tracker.json';
 const LEGACY_FILE = 'plan-takip.json';
+const RES_FILE = 'resources.json';
+let gistRes = null;
 let legacy = false;
 const cfg = { token: localStorage.getItem('pt_token') || '', gist: localStorage.getItem('pt_gist') || '', repo: localStorage.getItem('pt_repo') || '', repoToken: localStorage.getItem('pt_repo_token') || '' };
 let dirty = false;
@@ -286,6 +288,7 @@ async function load() {
     if (!Array.isArray(json.plans)) throw new Error('The Gist content is not in the expected format');
     if (gist !== cfg.gist) return;
     legacy = !files[GIST_FILE] && !!files[LEGACY_FILE];
+    if (files[RES_FILE] !== gistRes) { gistRes = files[RES_FILE] || null; res = null; }
     if (loaded && (gen !== startGen || dirty)) return status(dirty ? 'Saving…' : '');
     data = json;
     loaded = true;
@@ -441,9 +444,10 @@ const URL_RE = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)'\]])/g;
 const linkify = (text) => text.split(URL_RE).map((part, n) => n % 2 ? extLink(part, part) : part);
 
 function repoPathOf(url) {
-  if (!cfg.repo) return null;
+  const repo = cfg.repo || res?.source || '';
+  if (!repo) return null;
   const m = url.match(/^https?:\/\/github\.com\/([^/]+\/[^/#?]+)(?:\/(?:blob|tree)\/[^/]+\/([^#?]*))?\/?(?:[#?].*)?$/i);
-  return m && m[1].toLowerCase() === cfg.repo.toLowerCase() ? decodeURIComponent(m[2] || '') : null;
+  return m && m[1].toLowerCase() === repo.toLowerCase() ? decodeURIComponent(m[2] || '') : null;
 }
 
 function extLink(href, ...kids) {
@@ -472,7 +476,7 @@ function renderSide() {
     h('div', { class: 'nav' + (view === 'calendar' ? ' sel' : ''), onclick: () => { view = 'calendar'; render(); } }, h('span', {}, '🗓 Calendar')),
     h('div', { class: 'nav' + (view === 'ideas' ? ' sel' : ''), onclick: () => { view = 'ideas'; render(); } },
       h('span', {}, '💡 Ideas'), data.ideas.length ? h('span', { class: 'pct' }, String(data.ideas.length)) : null),
-    cfg.repo ? h('div', { class: 'nav' + (view === 'resources' ? ' sel' : ''), onclick: () => openRes('') }, h('span', {}, '📚 Resources')) : null,
+    cfg.repo || gistRes ? h('div', { class: 'nav' + (view === 'resources' ? ' sel' : ''), onclick: () => openRes('') }, h('span', {}, '📚 Resources')) : null,
     h('div', { class: 'nav' + (view === 'import' ? ' sel' : ''), onclick: () => { view = 'import'; render(); } }, h('span', {}, '📥 Bulk add')),
     h('div', { class: 'sep' }),
     plans.map((p) => h('div', { class: 'nav' + (view === p.id ? ' sel' : '') + (p.archived ? ' archived' : ''), onclick: () => { view = p.id; confirmDelete = false; render(); } },
@@ -714,6 +718,16 @@ async function loadRes() {
   res = { files: [], text: {}, loading: true };
   render();
   try {
+    if (gistRes || !cfg.repo) {
+      const f = (await gh('/' + cfg.gist)).files[RES_FILE];
+      if (!f) throw new Error(`${RES_FILE} is not in the Gist yet.`);
+      const json = JSON.parse(f.truncated ? await (await fetch(f.raw_url, { cache: 'no-store' })).text() : f.content);
+      gistRes = f;
+      const files = Object.keys(json.files || {});
+      res = { files, text: json.files, source: json.source, synced: json.synced };
+      if (view === 'resources') render();
+      return;
+    }
     const tree = await ghRepo('/git/trees/HEAD?recursive=1');
     const dir = (f) => f.split('/').slice(0, -1).join('/');
     const files = tree.tree.filter((t) => t.type === 'blob' && /\.md$/i.test(t.path) && t.path !== 'CLAUDE.md').map((t) => t.path)
@@ -809,7 +823,7 @@ function mdBlocks(text, from) {
 const resLabel = (f) => f.split('/').pop().replace(/\.md$/i, '');
 
 function renderResources() {
-  if (!cfg.repo) {
+  if (!cfg.repo && !gistRes) {
     return fill($('main'), h('div', { class: 'title' }, 'Resources'),
       h('p', { class: 'small' }, 'Add a GitHub repo of markdown notes (e.g. ', h('code', {}, 'you/resources'), ') under ',
         h('a', { href: '#', onclick: (e) => { e.preventDefault(); view = 'setup'; render(); } }, '⚙︎ Connection'), ' to read it here.'));
@@ -819,7 +833,8 @@ function renderResources() {
   if (res.loading) return fill($('main'), h('div', { class: 'title' }, 'Resources'), h('div', { class: 'empty' }, 'Loading…'));
   const head = h('div', { class: 'calhead' }, h('div', { class: 'title' }, '📚 Resources'),
     h('button', { title: 'Reload from GitHub', onclick: () => { res = null; render(); } }, '↻'),
-    h('a', { class: 'small', href: `https://github.com/${cfg.repo}`, target: '_blank', rel: 'noopener' }, 'GitHub'));
+    res.synced ? h('span', { class: 'small' }, 'Updated ' + fmt(res.synced.slice(0, 10))) : null,
+    h('a', { class: 'small', href: `https://github.com/${res.source || cfg.repo}`, target: '_blank', rel: 'noopener' }, 'GitHub'));
   if (res.err) return fill($('main'), head, h('div', { class: 'empty', style: 'color:var(--bad)' }, res.err));
 
   const search = h('input', { type: 'search', placeholder: 'Search all resources…', value: resQuery, oninput: (e) => { resQuery = e.target.value; showBody(); } });
