@@ -54,6 +54,9 @@
   h2.bad { color:var(--bad); }
   .empty { color:var(--muted); padding:8px 0; }
   .actions { margin-top:28px; display:flex; gap:8px; }
+  .notesbox { margin:0 0 14px; }
+  .notesbox.view { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:14px; line-height:1.5; cursor:text; word-break:break-word; }
+  textarea.notes { min-height:120px; margin:0; font-size:14px; }
   .form { display:flex; flex-direction:column; gap:6px; max-width:520px; margin-top:12px; }
   .form .actions { margin-top:10px; }
   a { color:var(--acc); }
@@ -113,6 +116,23 @@
   button.ghost { border:none; color:var(--muted); }
   button.ghost:hover { color:var(--ink); }
   .fnote { margin-top:28px; color:var(--muted); font-size:13px; }
+  .matrix { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px; }
+  .quad { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:4px 12px 10px; min-width:0; }
+  .quad h2 { margin:10px 0 4px; color:var(--ink); }
+  .quad.q1 { border-top:3px solid var(--bad); }
+  .quad.q2 { border-top:3px solid var(--acc); }
+  .quad.q3 { border-top:3px solid #e0a030; }
+  .quad.q4 { border-top:3px solid var(--line); }
+  .qhint { display:block; font-size:12px; font-weight:400; color:var(--muted); }
+  .quad .item { flex-wrap:wrap; gap:2px 8px; }
+  .quad .item input[type=text] { flex:1 1 calc(100% - 70px); min-width:0; }
+  .quad .item .plan { order:5; margin-left:60px; }
+  .quad .item input[type=date] { order:6; width:auto; padding:0 6px; font-size:13px; }
+  .quad .item button.icon { order:7; font-size:13px; }
+  .ftimer.over { color:var(--bad); }
+  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); display:none; gap:12px; align-items:center; padding:8px 10px 8px 14px; border-radius:8px; background:var(--ink); color:var(--bg); font-size:14px; }
+  #toast.show { display:flex; }
+  #toast button { color:var(--bg); border-color:var(--muted); }
   #status { position:fixed; bottom:16px; right:16px; padding:6px 12px; border-radius:6px; background:var(--card); box-shadow:0 0 0 1px var(--line); font-size:13px; display:none; }
   #status.show { display:block; }
   #status.bad { background:var(--bad); color:#fff; box-shadow:none; }
@@ -127,6 +147,7 @@
     .add { flex-wrap:wrap; }
     .importgrid { grid-template-columns:1fr; }
     .ftask { font-size:26px; }
+    .matrix { grid-template-columns:1fr; }
     main.focus { padding:24px; }
     textarea.big { min-height:220px; }
     .cal.week { grid-template-columns:1fr; }
@@ -148,6 +169,7 @@
 <aside id="side"></aside>
 <main id="main"></main>
 <div id="status"></div>
+<div id="toast"></div>
 <script>
 let data = { plans: [] };
 let view = 'focus';
@@ -205,23 +227,27 @@ function demoData() {
   const t = today();
   const items = (list) => list.map(([off, text, done, prio]) => ({ id: uid(), text, date: off == null ? '' : addDays(t, off), done: !!done, prio: prio || 0 }));
   return { plans: [
-    { id: 'aws', title: 'AWS Cloud Practitioner', due: addDays(t, 18), prio: 2, archived: false, items: items([
+    { id: 'aws', title: 'AWS Cloud Practitioner', due: addDays(t, 18), prio: 2, archived: false,
+      notes: 'Exam guide: https://aws.amazon.com/certification/certified-cloud-practitioner/\nNotes folder: ~/study/aws\nPass mark 700/1000, 90 minutes', items: items([
       [-6, 'Cloud concepts and AWS global infrastructure', 1], [-4, 'IAM: users, groups, roles, policies', 1], [-2, 'EC2 and pricing models', 1],
-      [-1, 'S3 storage classes', 0, 2], [0, 'RDS, DynamoDB, Aurora'], [1, 'VPC, subnet, security group'], [3, 'CloudWatch, CloudTrail, Config'],
+      [-1, 'S3 storage classes 45m', 0, 1], [0, 'RDS, DynamoDB, Aurora 1h'], [1, 'VPC, subnet, security group'], [3, 'CloudWatch, CloudTrail, Config'],
       [5, 'Practice exam 1', 0, 1], [7, 'Shared responsibility model'], [9, 'Billing, Cost Explorer, Budgets'], [11, 'Well-Architected six pillars'],
       [13, 'Practice exam 2'], [16, 'Review weak topics'], [null, 'Book the exam', 1]]) },
     { id: 'run', title: '5K run training', due: addDays(t, 30), archived: false, items: items([
       [-5, '20 min easy run', 1], [-3, 'Interval 6x400m', 1], [-1, '25 min easy run'], [2, 'Long run 4 km'],
       [4, 'Interval 8x400m'], [6, '30 min tempo run'], [9, 'Long run 5 km'], [12, 'Test 5K']]) },
     { id: 'english', title: 'English speaking', due: '', archived: false, items: items([
-      [-7, 'Podcast + 10 new words', 1], [0, 'italki lesson'], [7, 'italki lesson'], [14, 'italki lesson'], [21, 'italki lesson']]) },
+      [-7, 'Podcast + 10 new words', 1], [0, 'italki lesson'], [7, 'italki lesson'], [14, 'italki lesson'], [21, 'italki lesson'], [null, 'Watch a film without subtitles']]) },
     { id: 'moving', title: 'Moving house', due: addDays(t, 24), prio: 1, archived: false, items: items([
-      [2, 'Get quotes from movers', 0, 2], [8, 'Pack the boxes'], [15, 'Transfer the internet contract'], [22, 'Update address'], [null, 'Donate what I don\'t need', 0, 1]]) },
-  ] };
+      [2, 'Get quotes from movers 20m', 0, 1], [8, 'Pack the boxes'], [15, 'Transfer the internet contract'], [22, 'Update address'], [null, 'Donate what I don\'t need', 0, 1]]) },
+  ], ideas: [
+    ['YouTube', 'Turns Out: myths about sleep'], ['YouTube', 'Spanish history channel, long-form'], ['YouTube', 'Silent film series about inventions'],
+    ['Projects', 'My own video editor (like kurgu)'], ['Projects', 'Habit tracker for the phone'],
+  ].map(([cat, text]) => ({ id: uid(), cat, text })) };
 }
 
 async function load() {
-  if (DEMO) { data = demoData(); view = 'focus'; status(DEMO_MSG); return render(); }
+  if (DEMO) { data = demoData(); normalizePrio(); rolled = rollover(); view = 'focus'; status(DEMO_MSG); return render(); }
   if (!cfg.token || !cfg.gist) { view = 'setup'; return render(); }
   const startGen = gen;
   while (inflight) await inflight;
@@ -238,8 +264,12 @@ async function load() {
     if (loaded && (gen !== startGen || dirty)) return status(dirty ? 'Saving…' : '');
     data = json;
     loaded = true;
+    normalizePrio();
+    const moved = rollover();
+    rolled += moved;
     if (view === 'setup') view = 'focus';
     status('');
+    if (moved) return save();
   } catch (e) {
     status(e.message, true);
     if (!loaded) view = 'setup';
@@ -294,8 +324,8 @@ function status(msg, bad) {
 const progress = (p) => p.items.length ? Math.round(100 * p.items.filter((i) => i.done).length / p.items.length) : 0;
 const findPlan = (id) => data.plans.find((p) => p.id === id);
 
-const PRIO_LABEL = ['Normal', 'Important', 'Urgent'];
-const PRIO_MARK = ['', '!', '!!'];
+const PRIO_LABEL = ['Normal', 'Important'];
+const PRIO_MARK = ['', '!'];
 
 function validDate(s) {
   const d = new Date(s + 'T00:00');
@@ -316,7 +346,7 @@ function takeDate(s) {
 
 function takePrio(s) {
   let prio = 0;
-  s = s.replace(/(^|\s)(!{1,3})(?=\s|$)/g, (_, sp, bangs) => { prio = Math.max(prio, Math.min(bangs.length, 2)); return sp; });
+  s = s.replace(/(^|\s)(!{1,3})(?=\s|$)/g, (_, sp) => { prio = 1; return sp; });
   return [prio, s.replace(/\s+/g, ' ').trim()];
 }
 
@@ -334,19 +364,30 @@ function parseImport(text) {
   let cur = null;
   for (const raw of text.split('\n')) {
     const line = raw.trim();
-    if (!line) continue;
+    if (!line || line.startsWith('```')) continue;
     const hm = line.match(/^#+\s*(.*)$/);
     if (hm) {
+      const im = hm[1].match(/^ideas?\s*(?:[:\-–—]\s*(.*))?$/i);
+      if (im) { plans.push((cur = { idea: true, cat: ideaCat(im[1]), items: [] })); continue; }
       let s = hm[1], due = '', prio;
       const dm = s.match(/(?:^|\s)@(\S+)/);
       if (dm) { due = takeDate(dm[1])[0]; s = s.replace(dm[0], ' '); }
       [prio, s] = takePrio(s);
-      if (s) plans.push((cur = { title: s, due, prio, items: [] }));
+      if (s) plans.push((cur = { title: s, due, prio, notes: '', items: [] }));
+      continue;
+    }
+    if (line.startsWith('>')) {
+      if (cur && !cur.idea) cur.notes += (cur.notes ? '\n' : '') + line.replace(/^>\s?/, '');
+      continue;
+    }
+    if (cur?.idea) {
+      const text = line.replace(/^([-*•]|\d+[.)])\s+/, '').trim();
+      if (text) cur.items.push({ id: uid(), cat: cur.cat, text });
       continue;
     }
     const it = parseLine(line);
     if (!it) continue;
-    if (!cur) plans.push((cur = { title: 'General', due: '', prio: 0, items: [] }));
+    if (!cur) plans.push((cur = { title: 'General', due: '', prio: 0, notes: '', items: [] }));
     cur.items.push(it);
   }
   return plans;
@@ -354,20 +395,27 @@ function parseImport(text) {
 
 const findByTitle = (title) => data.plans.find((p) => !p.archived && p.title.toLowerCase() === title.toLowerCase());
 
+const ideaCat = (s) => (s || '').trim() || 'General';
+
 function importPlans(parsed) {
   for (const pp of parsed) {
+    if (pp.idea) { data.ideas.push(...pp.items); continue; }
     const p = findByTitle(pp.title);
     if (p) {
       p.items.push(...pp.items);
       if (pp.due) p.due = pp.due;
       if (pp.prio) p.prio = pp.prio;
+      if (pp.notes) p.notes = (p.notes ? p.notes + '\n' : '') + pp.notes;
     } else {
-      data.plans.push({ id: uid(), title: pp.title, due: pp.due, prio: pp.prio, archived: false, items: pp.items });
+      data.plans.push({ id: uid(), title: pp.title, due: pp.due, prio: pp.prio, notes: pp.notes, archived: false, items: pp.items });
     }
   }
 }
 
-const prioTag = (n) => n ? h('span', { class: 'ptag p' + n, title: PRIO_LABEL[n] }, PRIO_MARK[n]) : null;
+const URL_RE = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)'\]])/g;
+const linkify = (text) => text.split(URL_RE).map((part, n) => n % 2 ? h('a', { href: part, target: '_blank', rel: 'noopener noreferrer' }, part) : part);
+
+const prioTag = (n) => n ? h('span', { class: 'ptag p1', title: PRIO_LABEL[1] }, PRIO_MARK[1]) : null;
 
 function renderSide() {
   const plans = data.plans.filter((p) => showArchived || !p.archived).sort((a, b) => (b.prio || 0) - (a.prio || 0));
@@ -385,6 +433,8 @@ function renderSide() {
     h('div', { class: 'nav' + (view === 'today' ? ' sel' : ''), onclick: () => { view = 'today'; render(); } },
       h('span', {}, '📅 Today'), dueCount ? h('span', { class: 'pct' }, String(dueCount)) : null),
     h('div', { class: 'nav' + (view === 'calendar' ? ' sel' : ''), onclick: () => { view = 'calendar'; render(); } }, h('span', {}, '🗓 Calendar')),
+    h('div', { class: 'nav' + (view === 'ideas' ? ' sel' : ''), onclick: () => { view = 'ideas'; render(); } },
+      h('span', {}, '💡 Ideas'), data.ideas.length ? h('span', { class: 'pct' }, String(data.ideas.length)) : null),
     h('div', { class: 'nav' + (view === 'import' ? ' sel' : ''), onclick: () => { view = 'import'; render(); } }, h('span', {}, '📥 Bulk add')),
     h('div', { class: 'sep' }),
     plans.map((p) => h('div', { class: 'nav' + (view === p.id ? ' sel' : '') + (p.archived ? ' archived' : ''), onclick: () => { view = p.id; confirmDelete = false; render(); } },
@@ -446,17 +496,34 @@ function renderSetup() {
   );
 }
 
-function itemRow(item, plan, withPlanName) {
+function dropStep(item, plan) {
+  const idx = plan.items.indexOf(item);
+  plan.items.splice(idx, 1);
+  save();
+  toast('Step dropped.', 'Undo', () => { plan.items.splice(Math.min(idx, plan.items.length), 0, item); save(); });
+}
+
+let toastTimer;
+function toast(msg, label, fn) {
+  const el = $('toast');
+  fill(el, h('span', {}, msg), h('button', { onclick: () => { el.className = ''; clearTimeout(toastTimer); fn(); } }, label));
+  el.className = 'show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 6000);
+}
+
+function itemRow(item, plan, withPlanName, droppable) {
   const late = !item.done && item.date && item.date < today();
   const idx = plan.items.indexOf(item);
   const move = (d) => { const j = idx + d; if (j < 0 || j >= plan.items.length) return; [plan.items[idx], plan.items[j]] = [plan.items[j], plan.items[idx]]; save(); };
-  const prio = item.prio || 0;
+  const prio = item.prio ? 1 : 0;
   return h('div', { class: 'item' + (item.done ? ' done' : '') + (late ? ' late' : '') },
     h('input', { type: 'checkbox', checked: item.done, onchange: (e) => { item.done = e.target.checked; save(); } }),
-    h('button', { class: 'prio p' + prio, title: `Priority: ${PRIO_LABEL[prio]} (click to change)`, onclick: () => { item.prio = (prio + 1) % 3; save(); } }, PRIO_MARK[prio] || '·'),
+    h('button', { class: 'prio p' + prio, title: `${PRIO_LABEL[prio]} (click to change)`, onclick: () => { item.prio = prio ? 0 : 1; save(); } }, PRIO_MARK[prio] || '·'),
     h('input', { type: 'text', value: item.text, onchange: (e) => { item.text = e.target.value.trim() || item.text; save(); } }),
     withPlanName ? h('span', { class: 'plan', onclick: () => { view = plan.id; render(); } }, plan.title) : null,
     h('input', { type: 'date', value: item.date || '', onchange: (e) => { item.date = e.target.value; save(); } }),
+    droppable ? h('button', { class: 'icon', title: 'Remove this step', onclick: () => dropStep(item, plan) }, 'Drop') : null,
     withPlanName ? null : [
       h('button', { class: 'icon', title: 'Move up', onclick: () => move(-1) }, '↑'),
       h('button', { class: 'icon', title: 'Move down', onclick: () => move(1) }, '↓'),
@@ -467,21 +534,23 @@ function itemRow(item, plan, withPlanName) {
 
 function renderToday() {
   const t = today();
-  const week = addDays(t, 7);
-  const open = data.plans.filter((p) => !p.archived).flatMap((p) => p.items.filter((i) => !i.done).map((i) => ({ i, p })));
-  const byPrio = (a, b) => (b.i.prio || 0) - (a.i.prio || 0);
-  const rows = open.filter((r) => r.i.date).sort((a, b) => byPrio(a, b) || a.i.date.localeCompare(b.i.date));
-  const undated = open.filter((r) => !r.i.date && r.i.prio).sort(byPrio);
-  const group = (title, list, cls) => [
-    h('h2', { class: cls || '' }, title),
-    list.length ? list.map(({ i, p }) => itemRow(i, p, true)) : h('div', { class: 'empty' }, '—'),
-  ];
+  const rows = openSteps();
+  const laterCount = rows.filter((r) => r.later).length;
+  const box = (q, title, hint) => {
+    const list = rows.filter((r) => r.shown && r.q === q).sort((a, b) => (a.i.date || '').localeCompare(b.i.date || '') || a.idx - b.idx);
+    return h('div', { class: 'quad q' + q },
+      h('h2', {}, title, h('span', { class: 'qhint' }, hint)),
+      list.length ? list.map(({ i, p }) => itemRow(i, p, true, q === 4)) : h('div', { class: 'empty' }, '—'));
+  };
   fill($('main'),
     h('div', { class: 'title' }, 'Today · ' + fmt(t)),
-    group('Overdue', rows.filter((r) => r.i.date < t), 'bad'),
-    group('Today', rows.filter((r) => r.i.date === t)),
-    group('Next 7 days', rows.filter((r) => r.i.date > t && r.i.date <= week)),
-    group('Priority · no date', undated),
+    h('div', { class: 'matrix' },
+      box(1, 'Do first', 'important · due within 2 days'),
+      box(2, 'Schedule', 'important · no date yet'),
+      box(3, 'Get it done', 'due within 2 days'),
+      box(4, 'Drop?', 'not important · no date')),
+    laterCount ? h('div', { class: 'fnote' }, `${laterCount} later ${laterCount === 1 ? 'step is' : 'steps are'} in the `,
+      h('a', { href: '#', onclick: (e) => { e.preventDefault(); view = 'calendar'; render(); } }, 'Calendar'), '.') : null,
   );
 }
 
@@ -493,7 +562,7 @@ function renderPlan(p) {
   const date = h('input', { type: 'date' });
   const addOne = () => { const it = parseLine(text.value, { keepDate: !!date.value }); if (!it) return; if (date.value) it.date = date.value; p.items.push(it); save(); setTimeout(() => document.querySelector('.add input[type=text]')?.focus()); };
   text.addEventListener('keydown', (e) => { if (e.key === 'Enter') addOne(); });
-  const bulk = h('textarea', { placeholder: 'One step per line. Date at the start, priority (! or !!) anywhere, both optional:\n2026-10-14 IAM and security !!\n15.10 EC2, S3, RDS\n- Practice exam 1 !' });
+  const bulk = h('textarea', { placeholder: 'One step per line. Date at the start, ! for important, a time like 30m, all optional:\n2026-10-14 IAM and security ! 45m\n15.10 EC2, S3, RDS\n- Practice exam 1 ! 1h' });
 
   fill($('main'),
     h('input', { class: 'title', type: 'text', value: p.title, onchange: (e) => { p.title = e.target.value.trim() || p.title; save(); } }),
@@ -503,9 +572,10 @@ function renderPlan(p) {
       left == null ? null : h('span', { class: 'small', style: left < 0 ? 'color:var(--bad)' : '' }, left > 0 ? `${left} days left` : left === 0 ? 'Today!' : `${-left} days overdue`),
       h('span', { class: 'small' }, `${done}/${p.items.length} steps · ${pct}%`),
       h('select', { onchange: (e) => { p.prio = Number(e.target.value); save(); } },
-        PRIO_LABEL.map((l, n) => h('option', { value: String(n), selected: (p.prio || 0) === n }, n ? `${PRIO_MARK[n]} ${l}` : l))),
+        PRIO_LABEL.map((l, n) => h('option', { value: String(n), selected: (p.prio ? 1 : 0) === n }, n ? `${PRIO_MARK[n]} ${l}` : l))),
     ),
     h('div', { class: 'bar' }, h('div', { style: `width:${pct}%` })),
+    renderNotes(p),
     p.items.length ? p.items.map((i) => itemRow(i, p, false)) : h('div', { class: 'empty' }, 'No steps yet.'),
     h('div', { class: 'add' }, text, date, h('button', { class: 'primary', onclick: addOne }, 'Add')),
     h('details', {},
@@ -526,61 +596,128 @@ function renderPlan(p) {
   );
 }
 
-const IMPORT_EXAMPLE = `# AWS Cloud Practitioner @29.10 !!
-- 14.10 IAM and security !!
-- 16.10 EC2, S3, RDS
-- Practice exam 1 !
+let editingNotes = null;
+
+function renderNotes(p) {
+  if (editingNotes === p.id) {
+    const ta = h('textarea', { class: 'notes', value: p.notes || '', placeholder: 'Links, where things are, decisions…\nhttps://github.com/me/repo\nLocal folder: ~/projects/x' });
+    const done = () => { editingNotes = null; const v = ta.value.trim(); if (v !== (p.notes || '')) { p.notes = v; save(); } else render(); };
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) done(); });
+    setTimeout(() => ta.focus());
+    return h('div', { class: 'notesbox' }, ta, h('div', { class: 'actions', style: 'margin-top:6px' }, h('button', { class: 'primary', onclick: done }, 'Done')));
+  }
+  if (!p.notes) return h('button', { class: 'ghost', style: 'padding-left:0;margin-bottom:8px', onclick: () => { editingNotes = p.id; render(); } }, '+ Add notes (links, where things are, details)');
+  return h('div', { class: 'notesbox view', title: 'Click to edit', onclick: (e) => { if (e.target.tagName !== 'A') { editingNotes = p.id; render(); } } },
+    p.notes.split('\n').map((l) => h('div', {}, l ? linkify(l) : ' ')));
+}
+
+let ideaCatInput = '';
+
+function renderIdeas() {
+  const cats = [...new Set(data.ideas.map((i) => i.cat))];
+  const text = h('input', { type: 'text', placeholder: 'New idea…' });
+  const cat = h('input', { type: 'text', placeholder: 'Category', value: ideaCatInput, list: 'ideacats', style: 'max-width:160px' });
+  const add = () => {
+    const t = text.value.trim(); if (!t) return;
+    ideaCatInput = cat.value.trim();
+    data.ideas.push({ id: uid(), cat: ideaCat(ideaCatInput), text: t });
+    save(); setTimeout(() => document.querySelector('.add input[type=text]')?.focus());
+  };
+  text.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+  cat.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+  const toPlan = (i) => {
+    const p = { id: uid(), title: i.text, due: '', prio: 0, notes: i.note || '', archived: false, items: [] };
+    data.plans.push(p); data.ideas = data.ideas.filter((x) => x !== i); view = p.id; save();
+  };
+  const row = (i) => h('div', { class: 'item' },
+    h('input', { type: 'text', value: i.text, onchange: (e) => { const v = e.target.value.trim(); if (v) { i.text = v; save(); } } }),
+    h('button', { class: 'icon', title: 'Make it a plan', onclick: () => toPlan(i) }, '→ Plan'),
+    h('button', { class: 'icon', title: 'Delete', onclick: () => { data.ideas = data.ideas.filter((x) => x !== i); save(); toast('Idea deleted.', 'Undo', () => { data.ideas.push(i); save(); }); } }, '✕'));
+  fill($('main'),
+    h('div', { class: 'title' }, 'Ideas'),
+    h('div', { class: 'small', style: 'margin:6px 0 14px' }, 'Things you might do one day. They stay out of Now and Today until you make one a plan.'),
+    h('div', { class: 'add' }, text, cat, h('datalist', { id: 'ideacats' }, cats.map((c) => h('option', { value: c }))), h('button', { class: 'primary', onclick: add }, 'Add')),
+    data.ideas.length ? cats.flatMap((c) => [h('h2', {}, c), ...data.ideas.filter((i) => i.cat === c).map(row)])
+      : h('div', { class: 'empty' }, 'No ideas yet. Bulk add also takes a "# Ideas: YouTube" block.'),
+  );
+}
+
+const IMPORT_EXAMPLE = `# AWS Cloud Practitioner @29.10 !
+> Exam guide: https://aws.amazon.com/certification/certified-cloud-practitioner/
+- 14.10 IAM and security ! 45m
+- 16.10 EC2, S3, RDS 1h
+- Practice exam 1 ! 90m
 
 # Moving house @05.11
-- Get quotes from movers !!
-- Pack the boxes
+- Get quotes from movers ! 20m
+- Pack the boxes 2h
 
 # Reading
-- Finish Atomic Habits`;
+- Finish Atomic Habits
 
-const claudePrompt = () => `Rewrite the plans I describe below in this format. Return only the formatted text, no explanations.
+# Ideas: YouTube
+- Myths about sleep
+- History of the Vikings in 10 minutes`;
 
-Rules:
+const FORMAT_RULES = `Rules:
 - Each plan starts with a "# Plan name" line.
 - If the plan has a target or end date, add @DD.MM at the end of the title (e.g. # AWS exam @29.10).
 - Every line below it is one step: "- step". If the step has a day, put DD.MM at the start (e.g. - 14.10 Study IAM).
-- Priority: add " !" to important items and " !!" to urgent ones. Plan titles can have it too.
+- Add " !" to important items. Plan titles can have it too. Do not mark urgency; it comes from the dates.
+- Add a rough time to each step when you can, like 30m or 1h (e.g. - 14.10 Study IAM 45m).
 - Break big tasks into clear steps of at most 1-2 hours. Spread the dates realistically.
-- Today's date: ${fmt(today())} (${today()}).
+- Lines starting with "> " right under a plan title are the plan's notes: links (full https:// URLs), where things are (repo, folder), key decisions. Keep them short.
+- Ideas that are not plans yet go in a "# Ideas: Category" block (e.g. # Ideas: YouTube), one "- idea" per line, no dates.
 
 Example:
-${IMPORT_EXAMPLE}
+${IMPORT_EXAMPLE}`;
+
+const claudePrompt = () => `Rewrite the plans I describe below in this format. Return only the formatted text, no explanations.
+
+${FORMAT_RULES}
+
+Today's date: ${fmt(today())} (${today()}).
 
 My plans:
 `;
+
+const projectInstructions = () => `Whenever I ask you to plan something, or describe goals, tasks or deadlines, write the plan in the format below so I can paste it straight into my plan tracker. Put the formatted plan in a single code block. You can add one or two short sentences outside the block, but keep the block itself clean. Use today's date when choosing dates.
+
+${FORMAT_RULES}`;
 
 let importText = '';
 
 function renderImport() {
   const preview = h('div', { class: 'preview' });
   const showPreview = () => {
-    const parsed = parseImport(importText);
-    const steps = parsed.reduce((n, pp) => n + pp.items.length, 0);
+    const parsed = parseImport(importText).filter((pp) => !pp.idea || pp.items.length);
+    const plans = parsed.filter((pp) => !pp.idea);
+    const steps = plans.reduce((n, pp) => n + pp.items.length, 0);
+    const ideas = parsed.filter((pp) => pp.idea).reduce((n, pp) => n + pp.items.length, 0);
+    const n = (k, w) => `${k} ${w}${k === 1 ? '' : 's'}`;
     fill(preview,
-      parsed.length ? parsed.map((pp) => h('div', { class: 'pv' },
-        h('div', { class: 'pvh' }, prioTag(pp.prio), h('b', {}, pp.title),
-          pp.due ? h('span', { class: 'small' }, ' · 🎯 ' + fmt(pp.due)) : null,
-          h('span', { class: 'small' }, findByTitle(pp.title) ? ' · will be added to the existing plan' : ' · new plan')),
-        pp.items.map((i) => h('div', { class: 'pvi' }, prioTag(i.prio), i.text, i.date ? h('span', { class: 'small' }, ' · ' + fmt(i.date)) : null)),
-      )) : h('div', { class: 'empty' }, 'A preview appears here as you type.'),
+      parsed.length ? parsed.map((pp) => pp.idea
+        ? h('div', { class: 'pv' }, h('div', { class: 'pvh' }, h('b', {}, '💡 Ideas · ' + pp.cat)), pp.items.map((i) => h('div', { class: 'pvi' }, i.text)))
+        : h('div', { class: 'pv' },
+          h('div', { class: 'pvh' }, prioTag(pp.prio), h('b', {}, pp.title),
+            pp.due ? h('span', { class: 'small' }, ' · 🎯 ' + fmt(pp.due)) : null,
+            h('span', { class: 'small' }, findByTitle(pp.title) ? ' · will be added to the existing plan' : ' · new plan')),
+          pp.notes ? h('div', { class: 'pvi small' }, '📝 ', pp.notes.split('\n').flatMap((l, k) => [k ? h('br') : null, ...linkify(l)])) : null,
+          pp.items.map((i) => h('div', { class: 'pvi' }, prioTag(i.prio), i.text, i.date ? h('span', { class: 'small' }, ' · ' + fmt(i.date)) : null)),
+        )) : h('div', { class: 'empty' }, 'A preview appears here as you type.'),
       parsed.length ? h('button', { class: 'primary', onclick: () => {
         importPlans(parsed);
         importText = '';
-        view = 'calendar';
+        view = plans.length ? 'calendar' : 'ideas';
         save();
-      } }, `Add ${parsed.length} ${parsed.length === 1 ? 'plan' : 'plans'}, ${steps} ${steps === 1 ? 'step' : 'steps'}`) : null,
+      } }, 'Add ' + [plans.length ? n(plans.length, 'plan') + ', ' + n(steps, 'step') : '', ideas ? n(ideas, 'idea') : ''].filter(Boolean).join(', ')) : null,
     );
   };
   const ta = h('textarea', { class: 'big', value: importText, placeholder: IMPORT_EXAMPLE, oninput: (e) => { importText = e.target.value; showPreview(); } });
-  const copy = async () => {
+  const copy = (text, done) => async () => {
     try {
-      await navigator.clipboard.writeText(claudePrompt());
-      status('Copied. Paste it to Claude and add your plans at the end.');
+      await navigator.clipboard.writeText(text);
+      status(done);
     } catch {
       status('Could not copy. Copy the text below by hand.', true);
     }
@@ -592,16 +729,22 @@ function renderImport() {
       h('div', {}, h('code', {}, '# Plan name'), ' starts a new plan. If a plan with that name exists, the steps are added to it.'),
       h('div', {}, h('code', {}, '@29.10'), ' in the title: the plan\'s target date (day.month).'),
       h('div', {}, h('code', {}, '- 14.10 step'), ' is one step. The date at the start is optional (', h('code', {}, '2026-10-14'), ' also works).'),
-      h('div', {}, h('code', {}, '!'), ' important, ', h('code', {}, '!!'), ' urgent. Works on plans and steps.'),
+      h('div', {}, h('code', {}, '!'), ' marks a plan or step as important. Urgency comes from the date.'),
+      h('div', {}, h('code', {}, '30m'), ' or ', h('code', {}, '1h'), ' in a step is its rough time. The Now screen counts it down.'),
+      h('div', {}, h('code', {}, '> text'), ' under a plan title goes into the plan\'s notes (links, where things are).'),
+      h('div', {}, h('code', {}, '# Ideas: YouTube'), ' starts a block of ideas in that category, one per line.'),
     ),
     h('div', { class: 'importgrid' },
       h('div', {}, ta,
         h('div', { class: 'actions', style: 'margin-top:8px' },
           h('button', { onclick: () => { importText = IMPORT_EXAMPLE; ta.value = importText; showPreview(); } }, 'Fill in example'),
-          h('button', { onclick: copy }, '📋 Copy instructions for Claude'))),
+          h('button', { onclick: copy(claudePrompt(), 'Copied. Paste it to Claude and add your plans at the end.') }, '📋 Copy instructions for Claude'),
+          h('button', { onclick: copy(projectInstructions(), 'Copied. Paste it into your claude.ai project\'s instructions.') }, '📋 Copy as Claude project instructions')),
+        h('div', { class: 'small', style: 'margin-top:6px' }, 'Paste the project instructions into a claude.ai project once; every plan you ask for there comes out in this format.')),
       preview,
     ),
     h('details', {}, h('summary', {}, 'Show Claude instructions'), h('pre', { class: 'prompt' }, claudePrompt())),
+    h('details', {}, h('summary', {}, 'Show Claude project instructions'), h('pre', { class: 'prompt' }, projectInstructions())),
   );
   showPreview();
 }
@@ -681,26 +824,78 @@ function renderCalendar() {
 const skipped = new Set();
 let focusStart = null;
 
-function nextSteps() {
-  const t = today();
+const URGENT_DAYS = 2;
+const isUrgent = (i) => !!i.date && daysBetween(today(), i.date) <= URGENT_DAYS;
+const quadrant = (i) => (i.prio ? (isUrgent(i) ? 1 : 2) : (isUrgent(i) ? 3 : 4));
+
+function openSteps() {
   const rows = [];
   for (const p of data.plans.filter((x) => !x.archived)) {
     let firstUndated = true;
     p.items.forEach((i, idx) => {
       if (i.done) return;
-      let bucket;
-      if (i.date && i.date <= t) bucket = 0;
-      else if (!i.date && i.prio) bucket = 1;
-      else if (!i.date && firstUndated) bucket = 2;
-      else if (i.date) bucket = 3;
-      else return;
+      const first = !i.date && firstUndated;
       if (!i.date) firstUndated = false;
-      rows.push({ i, p, bucket, idx });
+      const later = !!i.date && !isUrgent(i);
+      rows.push({ i, p, idx, q: quadrant(i), later, shown: !later && (quadrant(i) !== 4 || first) });
     });
   }
-  return rows.sort((a, b) => a.bucket - b.bucket || (b.i.prio || 0) - (a.i.prio || 0) || (b.p.prio || 0) - (a.p.prio || 0)
-    || (a.i.date || '').localeCompare(b.i.date || '') || a.idx - b.idx);
+  return rows;
 }
+
+function nextSteps() {
+  const rows = openSteps();
+  const byOrder = (a, b) => (a.i.date || '').localeCompare(b.i.date || '') || (b.p.prio || 0) - (a.p.prio || 0) || a.idx - b.idx;
+  const now = rows.filter((r) => r.shown).sort((a, b) => a.q - b.q || byOrder(a, b));
+  const later = rows.filter((r) => r.later).sort(byOrder);
+  return [...now, ...later];
+}
+
+function durationOf(text) {
+  const m = text.match(/(?:^|\s)(\d+(?:\.\d+)?)(h|m|\s?min)(?=\s|$)/i);
+  if (!m) return 0;
+  const hours = m[2].toLowerCase() === 'h';
+  const mins = Math.round(Number(m[1]) * (hours ? 60 : 1));
+  return mins > 0 && mins <= (hours ? 480 : 180) ? mins : 0;
+}
+
+let audio;
+function chime() {
+  if (!audio) return;
+  const t0 = audio.currentTime;
+  [880, 660, 880].forEach((freq, k) => {
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    const at = t0 + k * 0.35;
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.25, at + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.3);
+    o.connect(g).connect(audio.destination);
+    o.start(at);
+    o.stop(at + 0.32);
+  });
+}
+
+function rollover() {
+  const t = today();
+  let n = 0;
+  for (const p of data.plans) {
+    if (p.archived) continue;
+    for (const i of p.items) if (!i.done && i.date && i.date < t) { i.date = t; n++; }
+  }
+  return n;
+}
+
+function normalizePrio() {
+  if (!Array.isArray(data.ideas)) data.ideas = [];
+  for (const p of data.plans) {
+    p.prio = p.prio ? 1 : 0;
+    for (const i of p.items) i.prio = i.prio ? 1 : 0;
+  }
+}
+
+let rolled = 0;
 
 function renderFocus() {
   const t = today();
@@ -715,21 +910,28 @@ function renderFocus() {
   }
   const { i, p } = cur;
   const running = focusStart && focusStart.id === i.id;
+  const mins = durationOf(i.text);
   const when = !i.date ? '' : i.date < t ? 'overdue' : i.date === t ? 'today' : fmt(i.date);
-  const todayLeft = list.filter((r) => r.bucket === 0 && r !== cur).length;
+  const todayLeft = list.filter((r) => r !== cur && r.i.date && r.i.date <= t).length;
+  const start = () => {
+    try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch {}
+    focusStart = { id: i.id, at: Date.now(), mins, rang: false };
+    render();
+  };
   fill($('main'),
     allPlans,
     h('div', { class: 'fcard' },
-      cur.bucket === 3 ? h('div', { class: 'fnote', style: 'margin:0 0 18px' }, 'Nothing left for today. Up next:') : null,
-      h('div', { class: 'fmeta' }, h('i', { class: 'dot', style: `background:${planColor(p)}` }), p.title, when ? ' · ' + when : ''),
+      cur.later ? h('div', { class: 'fnote', style: 'margin:0 0 18px' }, 'Nothing left for now. Up next:') : null,
+      h('div', { class: 'fmeta' }, h('i', { class: 'dot', style: `background:${planColor(p)}` }), p.title, when ? ' · ' + when : '', mins ? ` · ~${mins} min` : ''),
       h('div', { class: 'ftask' }, prioTag(i.prio), i.text),
-      running ? h('div', { class: 'ftimer', id: 'ftimer' }, '0:00') : null,
+      running ? h('div', { class: 'ftimer', id: 'ftimer' }, '') : null,
       h('div', { class: 'fbtns' },
-        running ? null : h('button', { class: 'primary big', onclick: () => { focusStart = { id: i.id, at: Date.now() }; render(); } }, 'Start'),
-        h('button', { class: running ? 'primary big' : 'big', onclick: () => { i.done = true; focusStart = null; save(); } }, '✓ Done'),
+        running ? null : h('button', { class: 'primary big', onclick: start }, 'Start'),
+        h('button', { class: running ? 'primary big' : 'big', onclick: () => { i.done = true; focusStart = null; rolled = 0; save(); } }, '✓ Done'),
       ),
       h('button', { class: 'ghost', style: 'margin-top:14px', onclick: () => { skipped.add(i.id); focusStart = null; render(); } }, 'Not now'),
       todayLeft ? h('div', { class: 'fnote' }, `${todayLeft} more for today`) : null,
+      rolled ? h('div', { class: 'fnote', style: 'margin-top:6px' }, `${rolled} unfinished ${rolled === 1 ? 'step' : 'steps'} moved to today`) : null,
     ),
   );
   tick();
@@ -739,12 +941,17 @@ function tick() {
   const el = $('ftimer');
   if (!el || !focusStart) return;
   const s = Math.floor((Date.now() - focusStart.at) / 1000);
-  el.textContent = `${Math.floor(s / 60)}:${pad(s % 60)}`;
+  const clock = (n) => `${Math.floor(n / 60)}:${pad(n % 60)}`;
+  if (!focusStart.mins) return void (el.textContent = clock(s));
+  const left = focusStart.mins * 60 - s;
+  el.textContent = left > 0 ? `${clock(left)} left` : `Time's up · +${clock(-left)}`;
+  el.classList.toggle('over', left <= 0);
+  if (left <= 0 && !focusStart.rang) { focusStart.rang = true; chime(); }
 }
 setInterval(tick, 1000);
 
 function render() {
-  $('main').classList.toggle('wide', view === 'calendar');
+  $('main').classList.toggle('wide', view === 'calendar' || view === 'today');
   $('main').classList.toggle('focus', view === 'focus');
   if (!DEMO && (view === 'setup' || !cfg.gist || !loaded)) {
     $('side').hidden = !loaded;
@@ -756,6 +963,7 @@ function render() {
   renderSide();
   if (view === 'calendar') return renderCalendar();
   if (view === 'import') return renderImport();
+  if (view === 'ideas') return renderIdeas();
   const p = view !== 'today' && findPlan(view);
   if (view !== 'today' && !p) view = 'today';
   p ? renderPlan(p) : renderToday();
